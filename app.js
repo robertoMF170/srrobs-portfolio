@@ -561,3 +561,105 @@ updateActiveNav();
   window._srCopy = copyText;
   window._srToast = showToast;
 })();
+
+// ========== VISITOR COUNTERS (Abacus) ==========
+// Serviço gratuito: abacus.jasoncameron.dev
+// /hit/<ns>/<name> incrementa e devolve a contagem | /get/<ns>/<name> so le
+// Nota: site estatico nao consegue ler IP/HWID real -> "unicos" = localStorage
+// + fingerprint leve (ecra/idioma/timezone). E prova social, nao analytics exata.
+(function(){
+  const NS = 'srrobs-portfolio';
+  const BASE = 'https://abacus.jasoncameron.dev';
+  const KEY_SEEN = '_srSeen';
+  const KEY_GH = '_srGhOpens';
+
+  const pad = (n) => String(n).padStart(3, '0');
+  const set = (id, val) => { const el = document.getElementById(id); if(el) el.textContent = val; };
+
+  async function hit(name){
+    try{
+      const r = await fetch(BASE + '/hit/' + NS + '/' + name, {method:'GET', keepalive:true});
+      if(!r.ok) throw 0;
+      const t = (await r.text()).trim();
+      const n = parseInt(t, 10);
+      return isNaN(n) ? null : n;
+    }catch(e){ return null; }
+  }
+
+  // Fingerprint leve so para distinguir navegadores/dispositivos diferentes
+  function fingerprint(){
+    const parts = [
+      screen.width, screen.height, screen.colorDepth,
+      navigator.language, (navigator.languages || []).join(','),
+      Intl.DateTimeFormat().resolvedOptions().timeZone || '',
+      navigator.hardwareConcurrency || '', navigator.platform || ''
+    ];
+    return parts.join('|');
+  }
+
+  function localSeen(){
+    try{
+      const raw = localStorage.getItem(KEY_SEEN);
+      const fp = fingerprint();
+      if(raw && raw === fp) return true;         // ja visitou neste dispositivo
+      localStorage.setItem(KEY_SEEN, fp);        // primeira vez (ou fingerprint mudou)
+      return false;
+    }catch(e){ return false; }                    // localStorage bloqueado -> conta como novo
+  }
+
+  function bumpLocal(key){
+    let n = 0;
+    try{ n = parseInt(localStorage.getItem(key) || '0', 10) || 0; }catch(e){}
+    n++;
+    try{ localStorage.setItem(key, String(n)); }catch(e){}
+    return n;
+  }
+
+  function init(){
+    // 1) Visitas totais
+    hit('visits').then(n => set('visitCount', n !== null ? pad(n) : pad(bumpLocal('visits'))));
+
+    // 2) Visitantes unicos (incrementa so na 1a visita deste navegador)
+    if(!localSeen()){
+      hit('uniques').then(n => set('uniqueCount', n !== null ? pad(n) : '001'));
+    }else{
+      fetch(BASE + '/get/' + NS + '/uniques')
+        .then(r => r.ok ? r.text() : Promise.reject())
+        .then(t => { const n = parseInt(t.trim(), 10); if(!isNaN(n)) set('uniqueCount', pad(n)); })
+        .catch(()=> set('uniqueCount', '001')); // chave ainda nao criada ou servico caido
+    }
+
+    // 3) Links GitHub abertos -> footer
+    fetch(BASE + '/get/' + NS + '/github-opens')
+      .then(r => r.ok ? r.text() : Promise.reject())
+      .then(t => { const n = parseInt(t.trim(), 10); if(!isNaN(n)) set('githubOpens', pad(n)); })
+      .catch(()=>{ // chave ainda nao criada ou servico caido -> mostra contagem local
+          let n = 0;
+          try{ n = parseInt(localStorage.getItem(KEY_GH) || '0', 10) || 0; }catch(e){}
+          set('githubOpens', pad(n));
+        });
+  }
+
+  function trackGithubOpen(){
+    hit('github-opens').then(n => {
+      if(n !== null) set('githubOpens', pad(n));
+      else set('githubOpens', pad(bumpLocal(KEY_GH)));
+    });
+  }
+
+  // Cliques em links GitHub: taskbar, cards de projeto, cartao de contacto
+  // (nao bloqueia a navegacao; um unico increment por clique — fetch com keepalive)
+  document.addEventListener('click', (e) => {
+    const a = e.target.closest && e.target.closest('a[href]');
+    if(!a) return;
+    const href = a.getAttribute('href') || '';
+    if(!/^https?:\/\/github\.com\//i.test(href)) return;
+    // dispara sem await — o link abre em nova aba (target=_blank) e a pagina continua viva
+    trackGithubOpen();
+  }, {passive:true});
+
+  if(document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
+  else init();
+
+  window._srCounters = { hit, trackGithubOpen };
+})();

@@ -172,6 +172,7 @@ body.has-cursor .cursor,body.has-cursor .cursor-dot{opacity:1}
 .btn.small{padding:8px 12px;font-size:11px}
 .hero-meta{margin-top:18px;display:flex;gap:12px;flex-wrap:wrap;font-size:10px;letter-spacing:.1em;color:#888}
 .blink{animation:blink 1s steps(2) infinite;color:var(--red)}
+.metric-num{color:var(--red);font-variant-numeric:tabular-nums;font-weight:700}
 @keyframes blink{0%{opacity:1}50%{opacity:0}}
 .card-stack{display:flex;flex-direction:column;gap:14px}
 .info-card{background:var(--black);color:var(--white);padding:18px;border:1px solid #1A1A1A;position:relative;overflow:hidden;transition:transform .4s var(--ease), border-color .3s}
