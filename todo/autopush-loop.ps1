@@ -180,7 +180,7 @@ function Update-GitHubDescriptionWithToken([string] $Slug, [string] $Description
         [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
         $uri = 'https://api.github.com/repos/' + $Slug
         $body = @{ description = $Description } | ConvertTo-Json -Compress
-        $null = Invoke-RestMethod -Uri $uri -Method Patch -Headers $headers -Body $body -ContentType 'application/json; charset=utf-8' -UseBasicParsing -ErrorAction Stop
+        $null = Invoke-RestMethod -Uri $uri -Method Patch -Headers $headers -Body $body -ContentType 'application/json; charset=utf-8' -TimeoutSec 15 -UseBasicParsing -ErrorAction Stop
         Write-Host 'Descrição remota do GitHub atualizada com sucesso.' -ForegroundColor Green
     } catch {
         $status = $null
@@ -230,7 +230,7 @@ function Set-GitHubRepositoryDescription([string] $Description) {
     # Check whether a public repository already has this description without prompting for a token.
     try {
         [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
-        $publicRepo = Invoke-RestMethod -Uri ('https://api.github.com/repos/' + $slug) -Method Get -Headers @{ Accept = 'application/vnd.github+json' } -UseBasicParsing -ErrorAction Stop
+        $publicRepo = Invoke-RestMethod -Uri ('https://api.github.com/repos/' + $slug) -Method Get -Headers @{ Accept = 'application/vnd.github+json' } -TimeoutSec 8 -UseBasicParsing -ErrorAction Stop
         if ([string]$publicRepo.description -ceq $Description) {
             Write-Host 'Descrição do GitHub já está atualizada.' -ForegroundColor Green
             return
