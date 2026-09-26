@@ -1,8 +1,7 @@
-.env
+﻿.env
 .freebuff/
 tools/
 github-setup/
-
 # ===== segredos / dados pessoais - NUNCA commitar =====
 *.token
 .gh_token
@@ -13,7 +12,6 @@ secrets*
 *.pem
 *.key
 id_rsa*
-
 # contas / saves do jogo
 *.es3
 *.es3.bak
@@ -36,14 +34,12 @@ screenshots/
 prints/
 sandbox/
 Sandbox/
-
 # logs e runtime (nunca vai para o git) - var/* e github-setup/* ignorados, mas visitas_totals.json sim
 *.log
 var/*
 !var/log
 var/log/*
 !visitas_totals.json
-
 # ambientes e caches
 __pycache__/
 *.pyc
@@ -51,10 +47,11 @@ __pycache__/
 venv/
 env/
 node_modules/
-
 # sistema
 .DS_Store
 Thumbs.db
 desktop.ini
 *.env
 *.env.*
+app.log
+app.err.log
