@@ -1,0 +1,3 @@
+User-agent: *
+Allow: /
+Sitemap: https://SEU_USER.github.io/SEU_REPO/sitemap.xml
