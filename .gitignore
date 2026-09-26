@@ -4,7 +4,6 @@ node_modules/
 github-setup/
 
 # ===== segredos / dados pessoais - NUNCA commitar =====
-# tokens / credenciais
 *.token
 .gh_token
 .gh_token.txt
@@ -38,14 +37,21 @@ prints/
 sandbox/
 Sandbox/
 
-# logs sempre
+# logs e estado autopush (nunca vai para o git)
 *.log
 app.log
 app.err.log
 loop.log
-
-# estado interno / runtime (nunca vai para o git)
+autopush.log
 var/
+autopush_status.json
+
+# auxiliares de autopush arquivados (so o loop fica no root)
+autopush.bat
+autopush-watch.bat
+autopush-silent.vbs
+autopush-status.bat
+src/autopush_watch.py
 
 # ambientes e caches
 __pycache__/
