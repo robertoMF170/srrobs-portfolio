@@ -179,8 +179,24 @@ def _escrever_stats(dados):
         "ips_online": sum(1 for r in por_ip if r["online"]),
         "total_visitas": sum(r["visitas"] for r in por_ip),
         "total_github": sum(r["github"] for r in por_ip),
+        "total_ips": len(por_ip),
+        "total_devices": len(por_device),
         "por_ip": por_ip,
         "por_device": por_device,
+    }
+
+
+def _public_stats(dados):
+    """Versão pública: só agregados, sem IDs (IP/HWID) — privacidade (RGPD)."""
+    s = _escrever_stats(dados)
+    return {
+        "agora": s["agora"],
+        "online_agora": s["online_agora"],
+        "ips_online": s["ips_online"],
+        "total_visitas": s["total_visitas"],
+        "total_github": s["total_github"],
+        "total_ips": s["total_ips"],
+        "total_devices": s["total_devices"],
     }
 
 
@@ -219,6 +235,11 @@ class VisitasHandler(BaseHTTPRequestHandler):
         return str(host) or "desconhecido"
 
     def _ficheiro(self, caminho):
+        # Bloqueia ficheiros sensíveis (var/, .git/, src/, tests/, config...)
+        rota = caminho.split("?", 1)[0].lstrip("/")
+        bloqueados = ("var/", ".git/", "src/", "tests/", "config/", ".freebuff/", "github-setup/", "var")
+        if any(rota == b.rstrip("/") or rota.startswith(b) for b in bloqueados):
+            return self._json({"erro": "nao encontrado"}, 404)
         raiz = Path(getattr(self.server, "srrobs_root", ROOT)).resolve()
         alvo = (raiz / caminho.lstrip("/")).resolve()
         try:
@@ -244,7 +265,7 @@ class VisitasHandler(BaseHTTPRequestHandler):
     def _responder_stats(self):
         with _LOCK:
             dados = carregar(_db())
-            payload = _escrever_stats(dados)
+            payload = _public_stats(dados)
         self._json({"ok": True, "stats": payload})
 
     def do_GET(self):
@@ -279,7 +300,7 @@ class VisitasHandler(BaseHTTPRequestHandler):
             dados = carregar(_db())
             registar(dados, self._ip(), device[:64], evento)
             guardar(_db(), dados)
-            payload = _escrever_stats(dados)
+            payload = _public_stats(dados)
         self._json({"ok": True, "stats": payload})
 
 

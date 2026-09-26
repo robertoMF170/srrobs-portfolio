@@ -179,8 +179,12 @@ class TestServidorHTTP(unittest.TestCase):
         _, texto, _ = self._pedido("/api/visitas")
         payload = json.loads(texto)
         self.assertTrue(payload["ok"])
-        self.assertIn("por_ip", payload["stats"])
-        self.assertIn("por_device", payload["stats"])
+        # API publica nao expõe por_ip/por_device (privacidade)
+        self.assertNotIn("por_ip", payload["stats"])
+        self.assertNotIn("por_device", payload["stats"])
+        self.assertIn("total_visitas", payload["stats"])
+        self.assertIn("total_ips", payload["stats"])
+        self.assertIn("total_devices", payload["stats"])
 
     def test_post_github_click(self):
         _, antes, _ = self._pedido("/api/visitas")
@@ -217,9 +221,17 @@ class TestServidorHTTP(unittest.TestCase):
             corpo={"device": "dev-xff", "event": "ping"},
             headers={"X-Forwarded-For": "9.9.9.9, 10.0.0.1"},
         )
-        _, texto, _ = self._pedido("/api/visitas")
-        ids = [r["id"] for r in json.loads(texto)["stats"]["por_ip"]]
+        # API publica nao expõe IPs — verifica no ficheiro interno
+        import time as _time  # noqa: F401
+        dados = sv.carregar(self.db)
+        interno = sv._escrever_stats(dados)
+        ids = [r["id"] for r in interno["por_ip"]]
         self.assertIn("9.9.9.9", ids)
+        # API continua a responder só agregados
+        _, texto, _ = self._pedido("/api/visitas")
+        pub = json.loads(texto)["stats"]
+        self.assertNotIn("por_ip", pub)
+        self.assertGreaterEqual(pub["total_ips"], 1)
 
     def test_json_invalido_vira_ping(self):
         req = urllib.request.Request(
