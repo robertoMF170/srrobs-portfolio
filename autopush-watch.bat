@@ -1,34 +1,97 @@
 @echo off
-setlocal
-rem autopush-watch.bat — MODO “ATÉ PARAR O PROJETO”
-rem Vigia o portfolio e faz push MAL EDITAS um ficheiro (com debounce).
-rem Corre até fechares esta janela ou Ctrl+C. Sem dados pessoais no commit.
+setlocal EnableDelayedExpansion
+chcp 65001 >nul 2>&1
+title WATCH — srrobs-portfolio (ate parares)
+color 0A
+
+rem autopush-watch.bat — MODO VISUAL “ATE PARAR O PROJETO”
+rem Fica aberto em loop visual: mostra OK a cada verificacao
+rem e quando alteras um ficheiro diz qual foi e faz push.
+rem Fecha so com Ctrl+C ou X.
 rem
 rem Uso:
-rem   autopush-watch.bat                  (poll 0.8s, debounce 4s)
-rem   autopush-watch.bat 2                (debounce 2s — push mais rápido)
-rem   autopush-watch.bat --once           (só 1 ciclo, sem vigiar)
-rem Oculto (sem janela):
-rem   wscript autopush-silent.vbs --watch
-rem   wscript autopush-silent.vbs --watch 2
+rem   duplo clique em autopush-watch.bat          (debounce 4s)
+rem   autopush-watch.bat 2                        (debounce 2s, push mais rapido)
+rem   autopush-watch.bat --once                   (so 1 ciclo, sem vigiar)
 
 set "REPO=%~dp0"
 if "%REPO:~-1%"=="\" set "REPO=%REPO:~0,-1%"
 set "DEBOUNCE=%~1"
 if "%DEBOUNCE%"=="" set "DEBOUNCE=4"
 if /I "%DEBOUNCE%"=="--once" (
+  echo [once] 1 ciclo...
   python -X utf8 "%REPO%\src\autopush_watch.py" --once
+  if errorlevel 1 (
+    echo [ERRO] python falhou. Tenta: py -3 -X utf8 src\autopush_watch.py --once
+    py -3 -X utf8 "%REPO%\src\autopush_watch.py" --once
+  )
+  echo.
+  echo [once] concluido. Pressiona qualquer tecla para fechar.
+  pause >nul
   exit /b %errorlevel%
 )
 if /I "%DEBOUNCE%"=="--watch" set "DEBOUNCE=%~2"
 if "%DEBOUNCE%"=="" set "DEBOUNCE=4"
 
+rem --- encontra python ---
+set "PY=python"
+where python >nul 2>&1
+if errorlevel 1 (
+  where py >nul 2>&1
+  if not errorlevel 1 set "PY=py -3"
+)
+where "%PY%" >nul 2>&1 2>nul
+if errorlevel 1 (
+  echo ========================================================
+  echo  ERRO: python nao encontrado no PATH
+  echo  Instala Python 3.10+ e marca "Add to PATH" ou
+  echo  corre: py -3 -X utf8 src\autopush_watch.py
+  echo  REPO: %REPO%
+  echo ========================================================
+  pause
+  exit /b 1
+)
+
+if not exist "%REPO%\src\autopush_watch.py" (
+  echo [ERRO] nao encontrei src\autopush_watch.py em %REPO%
+  pause
+  exit /b 1
+)
+
 echo ========================================================
-echo  WATCH — auto-push ate parares o projeto
+echo  WATCH — auto-push ate parares o projeto  (VISUAL)
 echo  REPO: %REPO%
-echo  Cada vez que guardas index.html/app.js/style.css/...
-echo  espera %DEBOUNCE%s e faz git push automaticamente.
-echo  Para PARAR: fecha esta janela ou Ctrl+C.
+echo  Vigia: index.html / app.js / style.css / visitas_totals.json ...
+echo  Debounce: %DEBOUNCE%s  (espera %DEBOUNCE%s apos gravar antes de push)
+echo  Ao gravar diz: [watch: alteracao detectada (ficheiro)] -^> push
+echo  Para PARAR: Ctrl+C ou fecha o X
 echo ========================================================
+echo  Se fechar sozinho, le o erro abaixo e corre autopush-status.bat
 echo.
-python -X utf8 "%REPO%\src\autopush_watch.py" --debounce %DEBOUNCE%
+
+:run_watch
+echo [watch] a iniciar...
+echo.
+
+rem --- lança watch (visual, com log na janela) ---
+%PY% -X utf8 "%REPO%\src\autopush_watch.py" --debounce %DEBOUNCE%
+set "RC=%errorlevel%"
+
+echo.
+echo --------------------------------------------------------
+if "%RC%"=="0" (
+  echo [watch] parado com codigo 0 (Ctrl+C ou parado normal).
+) else (
+  echo [watch] saiu com codigo %RC% — pode ter dado erro.
+  echo Ultimas linhas do log:
+  if exist "%REPO%\autopush.log" powershell -NoProfile -Command "Get-Content -Tail 20 -Encoding utf8 '%REPO%\autopush.log'" 2>nul
+  echo.
+  echo Tentando reiniciar em 3s... (Ctrl+C para nao reiniciar)
+  timeout /t 3 >nul
+  goto run_watch
+)
+
+echo.
+echo Pressiona qualquer tecla para fechar (ou fecha o X).
+pause >nul
+exit /b %RC%
