@@ -1,6 +1,6 @@
-node_modules/
 .env
 .freebuff/
+tools/
 github-setup/
 
 # ===== segredos / dados pessoais - NUNCA commitar =====
@@ -37,21 +37,12 @@ prints/
 sandbox/
 Sandbox/
 
-# logs e estado autopush (nunca vai para o git)
+# logs e runtime (nunca vai para o git) - var/* e github-setup/* ignorados, mas visitas_totals.json sim
 *.log
-app.log
-app.err.log
-loop.log
-autopush.log
-var/
-autopush_status.json
-
-# auxiliares de autopush arquivados (so o loop fica no root)
-autopush.bat
-autopush-watch.bat
-autopush-silent.vbs
-autopush-status.bat
-src/autopush_watch.py
+var/*
+!var/log
+var/log/*
+!visitas_totals.json
 
 # ambientes e caches
 __pycache__/

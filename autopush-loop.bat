@@ -3,17 +3,17 @@ setlocal EnableDelayedExpansion
 title LOOP - srrobs-portfolio (ate parares)
 color 0A
 rem autopush-loop.bat - auto-push em loop visual com censura (ate parares)
-rem Fica aberto a fazer commit+push de X em X segundos ate fechares com Ctrl+C ou X.
-rem Seguro: nunca commita dados pessoais (var/, *.log, *.es3, censurados)
+rem UNICO ficheiro no root. Fica aberto a fazer commit+push de X em X segundos.
+rem Seguro: nunca commita dados pessoais (var/, *.log, censurados).
 rem Uso: duplo clique  (60s)  |  autopush-loop.bat 30  |  autopush-loop.bat 120
-rem Para parar: Ctrl+C ou fecha o X
 
 set "REPO=%~dp0"
 if "%REPO:~-1%"=="\" set "REPO=%REPO:~0,-1%"
 set "INTERVAL=%~1"
 if "%INTERVAL%"=="" set "INTERVAL=60"
-set "LOG=%REPO%\autopush.log"
+set "LOG=%REPO%\var\log\autopush.log"
 set "PATH=%PATH%;C:\Program Files\Git\cmd;C:\Program Files\Git\bin"
+if not exist "%REPO%\var\log" mkdir "%REPO%\var\log" 2>nul
 
 echo ========================================================
 echo  LOOP - auto-push ate parares  (VISUAL COM CENSURA)
@@ -71,8 +71,6 @@ if errorlevel 1 (
   for /f %%i in ('git log --oneline -1 2^>nul') do echo [push] %%i
 )
 
-rem mostra o que mudou
-git diff --stat HEAD~1 HEAD 2>nul | findstr /v "warning" | head -n 6 2>nul
 echo [%date% %time%] ciclo concluido - proximo em %INTERVAL%s
 echo [loop] proximo em %INTERVAL%s... (Ctrl+C para parar)
 timeout /t %INTERVAL% /nobreak >nul
