@@ -1,1 +1,1 @@
-﻿Portfolio de projetos de software e automaÃ§Ã£o com Python, HTML, CSS, Node.js, Flask, FastAPI, SQLite, Pine Script, MQL5, OpenCV, Arduino, CCXT.
+Portfolio de projetos de software e automaÃ§Ã£o com Python, HTML, CSS, Node.js, Flask, FastAPI, SQLite, Pine Script, MQL5, OpenCV, Arduino, CCXT.

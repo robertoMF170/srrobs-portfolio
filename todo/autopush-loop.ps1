@@ -1,27 +1,56 @@
 [CmdletBinding()]
 param(
     [ValidateRange(30, 86400)]
-    [int] $IntervalSeconds = 300
+    [int] $IntervalSeconds = 300,
+    [switch] $Once
 )
 
 $ErrorActionPreference = 'Stop'
+$script:Utf8NoBom = New-Object System.Text.UTF8Encoding -ArgumentList $false
+[Console]::OutputEncoding = $script:Utf8NoBom
+[Console]::InputEncoding = $script:Utf8NoBom
+$OutputEncoding = $script:Utf8NoBom
+$script:GitHubTokenPrompted = $false
+$script:GitHubTokenSecure = $null
 $repo = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
 Set-Location $repo
 
 $descriptionPath = 'todo/repository-description.txt'
 $descriptionMaxLength = 350
+$expectedCommitSubject = 'chore: update redacted repository description'
 $protectedPaths = @(
     'index.html', 'app.js', 'style.css', 'favicon.svg', 'og-image.svg',
     '404.html', 'robots.txt', 'sitemap.xml', '.nojekyll', 'README.md',
     'src/', 'tests/', '.github/', 'visitas_totals.json'
 )
-$privatePathPattern = '(?i)(?:^|/)(?:var|config|credentials?|secrets?|sandbox|shots|capturas|screenshots|prints|github-setup|\.freebuff)(?:/|$)|(?:^|[._-])(?:password|passwd|token|secret|login|account|username|savefile|baus)(?:[._-]|$)|\.(?:env|token|pem|key|sav|es3|log|db)$'
-$expectedCommitSubject = 'chore: update redacted repository description'
+
+function Invoke-NativeCommand([string] $FilePath, [string[]] $Arguments) {
+    $oldPreference = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue'
+    try {
+        $output = @(& $FilePath @Arguments 2>&1 | ForEach-Object { [string] $_ })
+        $code = $LASTEXITCODE
+        if ($null -eq $code) { $code = 1 }
+        return [pscustomobject]@{ ExitCode = [int] $code; Output = $output }
+    } catch {
+        return [pscustomobject]@{ ExitCode = 1; Output = @() }
+    } finally {
+        $ErrorActionPreference = $oldPreference
+    }
+}
+
+function Write-LoopError([System.Management.Automation.ErrorRecord] $Record) {
+    $message = $Record.Exception.Message
+    if ($message.StartsWith('AUTOPUSH:')) {
+        Write-Host $message.Substring(9).Trim() -ForegroundColor Red
+        return
+    }
+    Write-Host ("Erro: {0}. Não foram apresentados detalhes que possam conter dados pessoais; verifique git status e a identidade Git." -f $Record.Exception.GetType().Name) -ForegroundColor Red
+}
 
 function Get-RedactedReadmeDescription {
-    # Only a fixed vocabulary of technology labels may leave the README.
-    # No author names, project/game handles, links, paths, or free-form prose are copied.
-    $readme = Get-Content -LiteralPath (Join-Path $repo 'README.md') -Raw
+    # Only fixed technology labels from this allowlist can leave the README.
+    $readme = Get-Content -LiteralPath (Join-Path $repo 'README.md') -Raw -Encoding UTF8
     $allowedTerms = @(
         @{ Pattern = '(?i)\bPython\b'; Label = 'Python' },
         @{ Pattern = '(?i)\bHTML\b'; Label = 'HTML' },
@@ -50,18 +79,26 @@ function Get-RedactedReadmeDescription {
     return $description
 }
 
-function Invoke-Git([string[]] $GitArgs) {
-    $null = & git @GitArgs 2>$null
-    if ($LASTEXITCODE -ne 0) {
-        throw "Falha ao executar uma operação Git ($($GitArgs[0])). Consulte o estado do repositório."
+function Invoke-GitChecked([string[]] $Arguments) {
+    $result = Invoke-NativeCommand 'git' $Arguments
+    if ($result.ExitCode -ne 0) {
+        if ($Arguments[0] -eq 'commit') {
+            $message = (($result.Output -join ' ') -replace '[\r\n]+', ' ')
+            $identityPattern = '(?i)Author identity unknown|unable to auto-detect email|please tell me who you are|fatal:.*user\.email'
+            if ([regex]::IsMatch($message, $identityPattern)) {
+                throw [System.InvalidOperationException]::new("AUTOPUSH: O commit falhou por falta da identidade Git. Configure 'git config --global user.name' e 'git config --global user.email' com os seus dados Git e reinicie. O valor/email não foi apresentado.")
+            }
+            throw [System.InvalidOperationException]::new("AUTOPUSH: O commit falhou (código $($result.ExitCode)); confira 'git status'. Detalhes ocultos para proteger dados pessoais.")
+        }
+        throw [System.InvalidOperationException]::new("AUTOPUSH: O comando Git '$($Arguments[0])' falhou (código $($result.ExitCode)); confirme a autenticação/ligação e tente de novo.")
     }
 }
 
 function Get-ChangedEntries {
-    $status = @(& git status --porcelain=v1 --untracked-files=all 2>$null)
-    if ($LASTEXITCODE -ne 0) { throw 'Não foi possível ler o estado Git.' }
+    $result = Invoke-NativeCommand 'git' @('status', '--porcelain=v1', '--untracked-files=all')
+    if ($result.ExitCode -ne 0) { throw [System.InvalidOperationException]::new('Não foi possível ler o estado do Git.') }
     $entries = @()
-    foreach ($line in $status) {
+    foreach ($line in $result.Output) {
         if ($line.Length -ge 3) {
             $entries += [pscustomobject]@{
                 Code = $line.Substring(0, 2)
@@ -90,77 +127,150 @@ function Get-SafePathLabel([string] $Path) {
 }
 
 function Write-SafeChangeSummary($Entries) {
-    Write-Host ("Alterações detetadas: {0} ficheiro(s). Nomes e conteúdos ocultos para proteger dados pessoais." -f $Entries.Count) -ForegroundColor Yellow
+    Write-Host ("Alterações detetadas: {0} ficheiro(s); nomes e conteúdos ocultos para proteger contas, nicks e dados pessoais." -f $Entries.Count) -ForegroundColor Yellow
     $groups = @($Entries | ForEach-Object {
         [pscustomobject]@{ Code = $_.Code; Label = Get-SafePathLabel $_.Path }
     } | Group-Object Code, Label | Sort-Object Name)
     foreach ($group in $groups) {
-        $item = $group.Group[0]
-        Write-Host ("  estado {0}, {1}: {2} ficheiro(s)" -f $item.Code, $item.Label, $group.Count)
+        $entry = $group.Group[0]
+        Write-Host ("  estado {0}, {1}: {2} ficheiro(s)" -f $entry.Code, $entry.Label, $group.Count)
     }
-    Write-Host 'Nenhum diff bruto é mostrado: pode conter passwords, APIs, contas ou nicks.' -ForegroundColor DarkGray
+    Write-Host 'Diffs brutos não são mostrados porque podem conter credenciais ou dados pessoais.' -ForegroundColor DarkGray
+}
+
+function Get-GitHubRepositorySlug {
+    $remote = Invoke-NativeCommand 'git' @('remote', 'get-url', 'origin')
+    if ($remote.ExitCode -ne 0 -or $remote.Output.Count -eq 0) { return $null }
+    $url = $remote.Output[0].Trim()
+    $pattern = '^(?:https?://(?:[^/@]+@)?|ssh://(?:[^/@]+@)?|(?:[^@]+@)?)github\.com[:/]([^/]+)/([^/?#]+?)(?:\.git)?/?$'
+    $match = [regex]::Match($url, $pattern, [Text.RegularExpressions.RegexOptions]::IgnoreCase)
+    if (-not $match.Success) { return $null }
+    return ($match.Groups[1].Value + '/' + $match.Groups[2].Value)
+}
+
+function Get-GitHubTokenSecure {
+    if (-not $script:GitHubTokenPrompted) {
+        $script:GitHubTokenPrompted = $true
+        Write-Host 'Para atualizar a descrição, use gh auth login ou forneça um token fine-grained com permissões Administration: write no repositório.' -ForegroundColor Yellow
+        $script:GitHubTokenSecure = Read-Host 'Token GitHub (Enter para saltar; entrada oculta)' -AsSecureString
+    }
+    if ($null -eq $script:GitHubTokenSecure -or $script:GitHubTokenSecure.Length -eq 0) { return $null }
+    return $script:GitHubTokenSecure
+}
+
+function Update-GitHubDescriptionWithToken([string] $Slug, [string] $Description) {
+    $secureToken = Get-GitHubTokenSecure
+    if ($null -eq $secureToken) {
+        Write-Host 'Descrição remota não alterada. Configure gh auth login e reinicie, ou volte a iniciar para introduzir um token.' -ForegroundColor Yellow
+        return
+    }
+
+    $pointer = [IntPtr]::Zero
+    $tokenText = $null
+    $headers = $null
+    $oldProtocols = [Net.ServicePointManager]::SecurityProtocol
+    try {
+        $pointer = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($secureToken)
+        $tokenText = [Runtime.InteropServices.Marshal]::PtrToStringBSTR($pointer)
+        $headers = @{
+            Authorization = "Bearer $tokenText"
+            Accept = 'application/vnd.github+json'
+            'X-GitHub-Api-Version' = '2022-11-28'
+        }
+        [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+        $uri = 'https://api.github.com/repos/' + $Slug
+        $body = @{ description = $Description } | ConvertTo-Json -Compress
+        $null = Invoke-RestMethod -Uri $uri -Method Patch -Headers $headers -Body $body -ContentType 'application/json; charset=utf-8' -UseBasicParsing -ErrorAction Stop
+        Write-Host 'Descrição remota do GitHub atualizada com sucesso.' -ForegroundColor Green
+    } catch {
+        $status = $null
+        if ($_.Exception.Response -and $_.Exception.Response.StatusCode) { $status = [int]$_.Exception.Response.StatusCode }
+        if ($status -in @(401, 403)) {
+            Write-Host ("GitHub recusou a autenticação (HTTP {0}). Confirme o token e a permissão Administration: write." -f $status) -ForegroundColor Red
+        } elseif ($status) {
+            Write-Host ("A atualização da descrição falhou (HTTP {0}); o detalhe foi ocultado." -f $status) -ForegroundColor Red
+        } else {
+            Write-Host 'Não foi possível contactar a API do GitHub; confirme a ligação à Internet.' -ForegroundColor Red
+        }
+    } finally {
+        if ($headers) { $headers.Clear() }
+        $tokenText = $null
+        if ($pointer -ne [IntPtr]::Zero) { [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($pointer) }
+        [Net.ServicePointManager]::SecurityProtocol = $oldProtocols
+    }
+}
+
+function Set-GitHubRepositoryDescription([string] $Description) {
+    $slug = Get-GitHubRepositorySlug
+    if (-not $slug) {
+        Write-Host 'Remote origin não é um URL GitHub reconhecido; descrição remota não alterada.' -ForegroundColor Yellow
+        return
+    }
+
+    $gh = Get-Command 'gh' -ErrorAction SilentlyContinue
+    if ($gh) {
+        $current = Invoke-NativeCommand $gh.Source @('repo', 'view', $slug, '--json', 'description', '--jq', '.description')
+        if ($current.ExitCode -eq 0) {
+            $remoteDescription = ($current.Output -join "`n").Trim()
+            if ($remoteDescription -ceq $Description) {
+                Write-Host 'Descrição do GitHub já está atualizada.' -ForegroundColor Green
+                return
+            }
+            $edit = Invoke-NativeCommand $gh.Source @('repo', 'edit', $slug, '--description', $Description)
+            if ($edit.ExitCode -eq 0) {
+                Write-Host 'Descrição remota do GitHub atualizada com sucesso.' -ForegroundColor Green
+                return
+            }
+            Write-Host 'GitHub CLI não autenticado ou sem permissão; a pedir autenticação segura.' -ForegroundColor Yellow
+        } else {
+            Write-Host 'GitHub CLI sem sessão autenticada; a pedir autenticação segura.' -ForegroundColor Yellow
+        }
+    }
+
+    # Check whether a public repository already has this description without prompting for a token.
+    try {
+        [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+        $publicRepo = Invoke-RestMethod -Uri ('https://api.github.com/repos/' + $slug) -Method Get -Headers @{ Accept = 'application/vnd.github+json' } -UseBasicParsing -ErrorAction Stop
+        if ([string]$publicRepo.description -ceq $Description) {
+            Write-Host 'Descrição do GitHub já está atualizada.' -ForegroundColor Green
+            return
+        }
+    } catch {
+        # Private repositories need authentication; do not echo HTTP/body details.
+    }
+    Update-GitHubDescriptionWithToken $slug $Description
 }
 
 function Get-Upstream {
-    $upstream = & git rev-parse --abbrev-ref --symbolic-full-name '@{upstream}' 2>$null
-    if ($LASTEXITCODE -ne 0 -or -not $upstream) { return $null }
-    return [string]$upstream
+    $result = Invoke-NativeCommand 'git' @('rev-parse', '--abbrev-ref', '--symbolic-full-name', '@{upstream}')
+    if ($result.ExitCode -ne 0 -or $result.Output.Count -eq 0) { return $null }
+    return $result.Output[0].Trim()
 }
 
 function Get-AheadCount([string] $Upstream) {
-    $count = & git rev-list --count "$Upstream..HEAD" 2>$null
-    if ($LASTEXITCODE -ne 0) { return $null }
-    return [int]$count
+    $result = Invoke-NativeCommand 'git' @('rev-list', '--count', ($Upstream + '..HEAD'))
+    if ($result.ExitCode -ne 0 -or $result.Output.Count -eq 0) { return $null }
+    $count = 0
+    if (-not [int]::TryParse($result.Output[0].Trim(), [ref]$count)) { return $null }
+    return $count
 }
 
-function Test-PendingCommitSafe([string] $Upstream, [string] $ExpectedDescription) {
-    $ahead = Get-AheadCount $Upstream
-    if ($null -eq $ahead -or $ahead -ne 1) { return $false }
-    $subject = & git log -1 --format=%s 2>$null
-    if ($LASTEXITCODE -ne 0 -or $subject -cne $expectedCommitSubject) { return $false }
-    $paths = @(& git diff --name-only "$Upstream..HEAD" 2>$null)
-    if ($LASTEXITCODE -ne 0 -or $paths.Count -ne 1 -or $paths[0] -cne $descriptionPath) { return $false }
-    $committedDescription = & git show "HEAD:$descriptionPath" 2>$null
-    if ($LASTEXITCODE -ne 0) { return $false }
-    return ((($committedDescription -join "`n").Trim()) -ceq $ExpectedDescription)
+function Test-PendingCommitSafe([string] $Upstream, [string] $Description) {
+    if ((Get-AheadCount $Upstream) -ne 1) { return $false }
+    $subject = Invoke-NativeCommand 'git' @('log', '-1', '--format=%s')
+    if ($subject.ExitCode -ne 0 -or $subject.Output.Count -eq 0 -or $subject.Output[0] -cne $expectedCommitSubject) { return $false }
+    $paths = Invoke-NativeCommand 'git' @('diff', '--name-only', ($Upstream + '..HEAD'))
+    if ($paths.ExitCode -ne 0 -or $paths.Output.Count -ne 1 -or $paths.Output[0] -cne $descriptionPath) { return $false }
+    $committed = Invoke-NativeCommand 'git' @('show', ('HEAD:' + $descriptionPath))
+    if ($committed.ExitCode -ne 0) { return $false }
+    return (($committed.Output -join "`n").Trim() -ceq $Description)
 }
 
 function Update-Description([string] $Description) {
-    $absolutePath = Join-Path $repo $descriptionPath
-    Set-Content -LiteralPath $absolutePath -Value $Description -Encoding UTF8
-    Write-Host ("Descrição censurada regenerada a partir do README: {0} tecnologia(s), {1} caracteres." -f (($Description -split ', ').Count), $Description.Length) -ForegroundColor Green
-
-    # The GitHub CLI receives only the prebuilt allowlisted summary, never raw README text.
-    $gh = Get-Command 'gh' -ErrorAction SilentlyContinue
-    if (-not $gh) {
-        Write-Host 'GitHub CLI não instalado; descrição local atualizada, descrição remota inalterada.' -ForegroundColor DarkGray
-        return
-    }
-    $remoteDescription = & gh repo view --json description --jq '.description' 2>$null
-    if ($LASTEXITCODE -ne 0) {
-        Write-Host 'Descrição remota não verificada (repo/autenticação indisponível); nenhuma alteração remota feita.' -ForegroundColor DarkGray
-        return
-    }
-    if ([string]$remoteDescription -cne $Description) {
-        $null = & gh repo edit --description $Description 2>$null
-        if ($LASTEXITCODE -eq 0) {
-            Write-Host 'Descrição pública do repositório atualizada com texto censurado.' -ForegroundColor Green
-        } else {
-            Write-Host 'Não foi possível atualizar a descrição remota; a descrição local continua atualizada.' -ForegroundColor Yellow
-        }
-    }
-}
-
-function Try-PushSafePendingCommit([string] $Upstream, [string] $Description) {
-    if (-not (Test-PendingCommitSafe $Upstream $Description)) { return $false }
-    Write-Host 'Encontrei um único commit automático já validado (apenas descrição censurada); a tentar enviá-lo.' -ForegroundColor Cyan
-    $null = & git push 2>$null
-    if ($LASTEXITCODE -eq 0) {
-        Write-Host 'Push concluído.' -ForegroundColor Green
-    } else {
-        Write-Host 'Push não concluído; será novamente tentado no próximo ciclo.' -ForegroundColor Yellow
-    }
-    return $true
+    $path = Join-Path $repo $descriptionPath
+    [IO.File]::WriteAllText($path, $Description + "`n", $script:Utf8NoBom)
+    Write-Host ("Descrição censurada gerada a partir do README: {0} termos permitidos, {1} caracteres." -f (($Description -split ', ').Count), $Description.Length) -ForegroundColor Green
+    Set-GitHubRepositoryDescription $Description
 }
 
 function Invoke-AuditCycle {
@@ -175,83 +285,80 @@ function Invoke-AuditCycle {
 
     $upstream = Get-Upstream
     if (-not $upstream) {
-        Write-Host 'Sem upstream Git configurado; publicação automática desativada.' -ForegroundColor Yellow
+        Write-Host 'Sem upstream Git; commit/push automáticos desativados.' -ForegroundColor Yellow
         return
     }
 
-    if (Try-PushSafePendingCommit $upstream $description) { return }
+    if (Test-PendingCommitSafe $upstream $description) {
+        Write-Host 'Commit pendente confirmado: contém apenas a descrição censurada gerada.' -ForegroundColor Cyan
+        $push = Invoke-NativeCommand 'git' @('push')
+        if ($push.ExitCode -eq 0) { Write-Host 'Push concluído.' -ForegroundColor Green }
+        else { Write-Host ("Push falhou (código {0}); será tentado novamente no próximo ciclo." -f $push.ExitCode) -ForegroundColor Yellow }
+        return
+    }
 
     if ($entries.Count -eq 0) {
         Write-Host 'Sem alterações locais.' -ForegroundColor DarkGray
         $ahead = Get-AheadCount $upstream
         if ($null -ne $ahead -and $ahead -gt 0) {
-            Write-Host ("Existem {0} commit(s) locais não reconhecidos como publicação segura; não serão enviados." -f $ahead) -ForegroundColor Yellow
+            Write-Host ("Existem {0} commits locais não reconhecidos como seguros; não serão enviados." -f $ahead) -ForegroundColor Yellow
         }
         return
     }
 
-    # Only the generated description can ever be committed. All site files, README changes,
-    # user files, secrets, game accounts, and unknown nicks are left untouched for manual review.
+    # Site, README, and all user-created files remain untouched. Only the generated text file
+    # can be committed; unknown personal data cannot accidentally enter a push.
     if ($entries.Count -ne 1 -or $entries[0].Path -cne $descriptionPath) {
-        Write-Host 'Publicação bloqueada: há alterações fora do ficheiro de descrição gerado. Nada foi staged, commitado ou enviado.' -ForegroundColor Yellow
+        Write-Host 'Commit bloqueado: há alterações além da descrição gerada. Nada foi staged, commitado ou enviado.' -ForegroundColor Yellow
         return
     }
     if (Test-ProtectedPath $entries[0].Path) {
-        Write-Host 'Publicação bloqueada por proteção de caminho.' -ForegroundColor Yellow
-        return
-    }
-    if (Test-Path -LiteralPath (Join-Path $repo $descriptionPath) -PathType Leaf) {
-        $onDisk = (Get-Content -LiteralPath (Join-Path $repo $descriptionPath) -Raw).Trim()
-        if ($onDisk -cne $description) {
-            Write-Host 'Publicação bloqueada: a descrição não coincide com o texto técnico censurado gerado.' -ForegroundColor Yellow
-            return
-        }
-    } else {
-        Write-Host 'Publicação bloqueada: ficheiro gerado não encontrado.' -ForegroundColor Yellow
+        Write-Host 'Commit bloqueado por proteção de caminho.' -ForegroundColor Yellow
         return
     }
 
-    & git diff --cached --quiet
-    if ($LASTEXITCODE -ne 0) {
+    $stagedCheck = Invoke-NativeCommand 'git' @('diff', '--cached', '--quiet')
+    if ($stagedCheck.ExitCode -ne 0) {
         Write-Host 'Há alterações staged preexistentes; não serão alteradas nem incluídas.' -ForegroundColor Yellow
         return
     }
     $ahead = Get-AheadCount $upstream
     if ($null -eq $ahead -or $ahead -ne 0) {
-        Write-Host 'Há commits locais pendentes ou não foi possível confirmar a branch; nada será enviado.' -ForegroundColor Yellow
+        Write-Host 'Existem commits locais pendentes ou não foi possível confirmar a branch; nada será enviado.' -ForegroundColor Yellow
         return
     }
 
-    Invoke-Git @('add', '--', $descriptionPath)
-    $staged = @(& git diff --cached --name-only 2>$null)
-    if ($LASTEXITCODE -ne 0 -or $staged.Count -ne 1 -or $staged[0] -cne $descriptionPath) {
-        Write-Host 'Verificação staged falhou; commit cancelado e staging mantido para inspeção.' -ForegroundColor Yellow
+    Invoke-GitChecked @('add', '--', $descriptionPath)
+    $staged = Invoke-NativeCommand 'git' @('diff', '--cached', '--name-only')
+    if ($staged.ExitCode -ne 0 -or $staged.Output.Count -ne 1 -or $staged.Output[0] -cne $descriptionPath) {
+        Write-Host 'Verificação do staging falhou; não foi criado commit.' -ForegroundColor Yellow
         return
     }
-    $stagedText = (& git show ":$descriptionPath" 2>$null) -join "`n"
-    if ($LASTEXITCODE -ne 0 -or $stagedText.Trim() -cne $description) {
+    $stagedContent = Invoke-NativeCommand 'git' @('show', (':' + $descriptionPath))
+    if ($stagedContent.ExitCode -ne 0 -or (($stagedContent.Output -join "`n").Trim() -cne $description)) {
         Write-Host 'Conteúdo staged não corresponde à descrição censurada; commit bloqueado.' -ForegroundColor Yellow
         return
     }
 
-    Write-Host ("Alteração segura aprovada: {0} (somente texto gerado de tecnologias permitidas)." -f (Get-SafePathLabel $descriptionPath)) -ForegroundColor Cyan
-    Invoke-Git @('commit', '-m', $expectedCommitSubject)
-    $null = & git push 2>$null
-    if ($LASTEXITCODE -eq 0) {
-        Write-Host 'Commit e push da descrição censurada concluídos.' -ForegroundColor Green
+    Write-Host 'Commit seguro: apenas a descrição gerada a partir de tecnologias permitidas.' -ForegroundColor Cyan
+    Invoke-GitChecked @('commit', '-m', $expectedCommitSubject)
+    Write-Host 'Commit criado. A enviar para o remote...' -ForegroundColor Green
+    $push = Invoke-NativeCommand 'git' @('push')
+    if ($push.ExitCode -eq 0) {
+        Write-Host 'Push concluído.' -ForegroundColor Green
     } else {
-        Write-Host 'Push falhou; só será tentado de novo se o commit continuar a corresponder às verificações de segurança.' -ForegroundColor Yellow
+        Write-Host ("Push falhou (código {0}); autentique o Git com o gestor de credenciais ou tente 'git push' manualmente. Será tentado novamente se o commit passar as verificações." -f $push.ExitCode) -ForegroundColor Yellow
     }
 }
 
 Write-Host 'Loop seguro iniciado. O site e README nunca são commitados ou enviados. Ctrl+C para parar.' -ForegroundColor Green
-Write-Host "Ciclo: $IntervalSeconds segundos (5 minutos por omissão). Inicia via PowerShell com .\autopush-loop.bat" -ForegroundColor Green
+Write-Host ("Ciclo: {0} segundos. Usa -Once para executar apenas um ciclo." -f $IntervalSeconds) -ForegroundColor Green
+if ($Once) {
+    try { Invoke-AuditCycle } catch { Write-LoopError $_; exit 1 }
+    exit 0
+}
 while ($true) {
-    try {
-        Invoke-AuditCycle
-    } catch {
-        Write-Host 'Erro no ciclo; sem ignorar verificações de segurança. Será tentado novamente no próximo.' -ForegroundColor Red
-    }
+    try { Invoke-AuditCycle } catch { Write-LoopError $_ }
     Write-Host ("Próxima verificação em {0} minuto(s). Ctrl+C para parar." -f [math]::Round($IntervalSeconds / 60, 1)) -ForegroundColor DarkGray
     Start-Sleep -Seconds $IntervalSeconds
 }
