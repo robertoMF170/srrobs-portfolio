@@ -663,3 +663,68 @@ updateActiveNav();
 
   window._srCounters = { hit, trackGithubOpen };
 })();
+
+/* ═══ SRR OBS — TRACKING LOCAL (IP + HWID/device-id via servidor python) ═══ */
+/* Conta visitas e cliques GitHub por IP e por dispositivo. Offline -> silêncio, */
+/* o Abacus em cima continua a funcionar como fallback (GitHub Pages).        */
+(function () {
+  'use strict';
+  var ENDPOINT = 'http://localhost:8766/api/visitas';
+  var KEY_DEVICE = '_srDevice';
+  var PING_MS = 45000; // < ONLINE_SEG(60s) no servidor -> mantém «online» fresco
+  var visitSent = false;
+
+  function deviceId() {
+    try {
+      var d = localStorage.getItem(KEY_DEVICE);
+      if (d) return d;
+      d = 'hw-' + (window.crypto && window.crypto.randomUUID
+        ? window.crypto.randomUUID()
+        : Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 10));
+      localStorage.setItem(KEY_DEVICE, d);
+      return d;
+    } catch (e) { return 'hw-anon'; }
+  }
+
+  function send(event) {
+    try {
+      fetch(ENDPOINT, {
+        method: 'POST',
+        mode: 'cors',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ device: deviceId(), event: event })
+      }).then(function (r) { return r.ok ? r.json() : null; })
+        .then(function (j) { if (j && j.ok) paint(j.stats); })
+        .catch(function () {});
+    } catch (e) {}
+  }
+
+  function paint(s) {
+    if (!s) return;
+    function set(id, v) {
+      var el = document.getElementById(id);
+      if (el && v !== null && v !== undefined) el.textContent = v;
+    }
+    var pad = function (n) { return String(n).padStart(3, '0'); };
+    set('visitCount', pad(s.total_visitas));
+    set('uniqueCount', pad((s.por_device || []).length));
+    set('githubOpens', pad(s.total_github));
+  }
+
+  function start() {
+    if (!visitSent) { visitSent = true; send('visit'); } // 1 visita por load
+    send('ping');
+    setInterval(function () { send('ping'); }, PING_MS);   // heartbeat «online agora»
+  }
+
+  // Clique em qualquer link github.com -> github_click (soma por IP e por HWID)
+  document.addEventListener('click', function (e) {
+    var a = e.target && e.target.closest ? e.target.closest('a[href]') : null;
+    if (a && /^https?:\/\/github\.com\//i.test(a.getAttribute('href') || '')) send('github_click');
+  }, { passive: true });
+
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start);
+  else start();
+
+  window._srLocal = { send: send, deviceId: deviceId };
+})();
