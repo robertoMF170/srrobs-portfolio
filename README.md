@@ -1,6 +1,6 @@
-# Dev Portfolio — ewan-kerboas.fr inspired
+# SrRobs Portfolio — ewan-kerboas.fr inspired
 
-> Portfolio brutalista **preto / branco / vermelho** para Utilizador (Dev) — Operação **Mainframe / Control-M**, Python & Web nos tempos livres.
+> Portfolio brutalista **preto / branco / vermelho** para Roberto (Robs / SrRobs) — Operação **Mainframe / Control-M**, Python & Web nos tempos livres.
 
 ![Design](https://img.shields.io/badge/design-brutalist_OS-black) ![Colors](https://img.shields.io/badge/preto-%23070707-black) ![Red](https://img.shields.io/badge/vermelho-%23E30613-red) ![Lenis](https://img.shields.io/badge/Lenis-smooth_scroll-blue)
 
@@ -8,7 +8,7 @@ Live: `https://robertomf170.github.io/srrobs-portfolio` (após ativar GitHub Pag
 
 ## O que tem
 
-- **Loader** `DEV_OS — BOOT` com barra + `%` + wipe.
+- **Loader** `SRROBS_OS — BOOT` com barra + `%` + wipe.
 - **Taskbar** fixa + **marquee** de stack + **scroll-progress** vermelho.
 - **Hero** com tipografia `Space Grotesk` + **Stagger** linha a linha.
 - **13 projetos** em grelha filtrável (`TODOS / TRADING / GAMES / BOTS / UTILS`) + **modal** com “O que faz + Arquitetura + ficheiros-chave” — tudo já documentado do `D:\`.
@@ -68,4 +68,4 @@ app.js          # Lenis + reveals + cursor + magnetic + filtros + PLACEHOLDER_DA
 
 ## Autor
 
-Utilizador (Dev) — https://github.com/robertoMF170 · Inspirado em https://ewan-kerboas.fr
+Roberto (Robs / SrRobs) — https://github.com/robertoMF170 · Inspirado em https://ewan-kerboas.fr

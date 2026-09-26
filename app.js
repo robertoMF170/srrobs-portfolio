@@ -329,7 +329,7 @@ const PROJECT_DATA = {
   },
   "kronos": {
     num:"06", path:"KRONOS", status:"◐ LAB — FOUNDATION MODEL", title:"Kronos — K-Lines Foundation Model",
-    desc:"Research lane da casa: wrapper Dev por cima do Kronos (NeoQuasar) — foundation model treinado em K-lines de 45 exchanges para prever e gerar sinais de crypto.",
+    desc:"Research lane da casa: wrapper Robs por cima do Kronos (NeoQuasar) — foundation model treinado em K-lines de 45 exchanges para prever e gerar sinais de crypto.",
     bullets:[
       "Tokenização hierárquica de OHLCV + Transformer autorregressivo; modelos mini (4.1M, ctx 2048) e small (24.7M, ctx 512) no HF.",
       "ia_signal.py + crypto_signals.py: fetch via CCXT Binance, load_kronos, run_kronos_prediction → sinais COMPRA/VENDA/NEUTRO.",
