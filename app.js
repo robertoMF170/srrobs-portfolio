@@ -727,14 +727,29 @@ updateActiveNav();
     set('srIpsOnline', String(s.ips_online != null ? s.ips_online : (s.ipsOnline || 0)));
   }
 
-  /* GET inicial: pinta totais/tabelas sem contar mais uma visita */
+  /* GET inicial: tenta localhost; se offline (GitHub Pages), lê snapshot público */
+  var SNAPSHOT_URL = 'visitas_totals.json';
+  function paintFromPublic(json){
+    // /visitas_totals.json ou {"ok":true,"stats":{...}} ou stats direto
+    var s = json && json.stats ? json.stats : json;
+    if (s && typeof s.total_visitas !== 'undefined') paint(s);
+  }
+  function fetchSnapshot(){
+    fetch(SNAPSHOT_URL, { cache: 'no-store' })
+      .then(function(r){ return r.ok ? r.json() : null; })
+      .then(function(j){ if(j) paintFromPublic(j); })
+      .catch(function(){});
+  }
   function fetchPaint() {
     try {
       fetch(ENDPOINT, { mode: 'cors' })
         .then(function (r) { return r.ok ? r.json() : null; })
-        .then(function (j) { if (j && j.ok) paint(j.stats); })
-        .catch(function () {});
-    } catch (e) {}
+        .then(function (j) {
+          if (j && j.ok) paint(j.stats);
+          else fetchSnapshot();
+        })
+        .catch(function () { fetchSnapshot(); });
+    } catch (e) { fetchSnapshot(); }
   }
 
   function start() {

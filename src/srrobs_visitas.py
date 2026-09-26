@@ -200,6 +200,31 @@ def _public_stats(dados):
     }
 
 
+def _snapshot_path():
+    # Snapshot público commitado — só agregados, sem IDs
+    return ROOT / "visitas_totals.json"
+
+
+def _gravar_snapshot(dados):
+    """Atualiza visitas_totals.json (público) a partir dos mesmos dados."""
+    try:
+        snap = _public_stats(dados)
+        caminho = _snapshot_path()
+        caminho.parent.mkdir(parents=True, exist_ok=True)
+        fd, tmp = tempfile.mkstemp(dir=str(caminho.parent), prefix=".visitas-snap-", suffix=".tmp")
+        try:
+            with os.fdopen(fd, "w", encoding="utf-8") as fh:
+                json.dump(snap, fh, ensure_ascii=False, indent=2, sort_keys=True)
+            os.replace(tmp, caminho)
+        finally:
+            try:
+                os.unlink(tmp)
+            except OSError:
+                pass
+    except Exception:
+        pass
+
+
 def stats(caminho=None):
     with _LOCK:
         dados = carregar(caminho or _db())
@@ -300,6 +325,7 @@ class VisitasHandler(BaseHTTPRequestHandler):
             dados = carregar(_db())
             registar(dados, self._ip(), device[:64], evento)
             guardar(_db(), dados)
+            _gravar_snapshot(dados)
             payload = _public_stats(dados)
         self._json({"ok": True, "stats": payload})
 
@@ -309,6 +335,13 @@ def arrancar(porta=PORTA_BASE, root=None, db=None, verbose=False):
     servidor = ThreadingHTTPServer(("0.0.0.0", porta), VisitasHandler)
     servidor.srrobs_root = Path(root).resolve() if root else ROOT
     servidor.srrobs_verbose = bool(verbose)
+    # Garante snapshot público inicial (para GitHub Pages funcionar sem servidor)
+    try:
+        with _LOCK:
+            dados = carregar(_db())
+            _gravar_snapshot(dados)
+    except Exception:
+        pass
     return servidor
 
 
