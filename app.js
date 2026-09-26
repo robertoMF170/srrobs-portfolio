@@ -699,7 +699,7 @@ updateActiveNav();
     } catch (e) {}
   }
 
-  // So contagem em cima (hero) — sem tabelas por IP/HWID (dados pessoais)
+  // Contadores: hero (em cima) + janela visitas (sem tabelas IP/HWID)
   function paint(s) {
     if (!s) return;
     function set(id, v) {
@@ -711,8 +711,20 @@ updateActiveNav();
     var uniq = (s.por_device || []).length;
     if (s.total_devices != null) uniq = s.total_devices;
     else if (s.totalDevices != null) uniq = s.totalDevices;
+    else if (s.total_ips != null) uniq = s.total_ips;
     set('uniqueCount', pad(uniq));
     set('githubOpens', pad(s.total_github));
+    // Janela visitas.log — só números, sem IDs
+    if (s.total_ips != null) set('srTotalIps', pad(s.total_ips));
+    else if (s.totalIps != null) set('srTotalIps', pad(s.totalIps));
+    else if (s.por_ip) set('srTotalIps', pad(s.por_ip.length));
+    if (s.total_devices != null) set('srTotalDevices', pad(s.total_devices));
+    else if (s.totalDevices != null) set('srTotalDevices', pad(s.totalDevices));
+    else if (s.por_device) set('srTotalDevices', pad(s.por_device.length));
+    set('srTotalVisitas', pad(s.total_visitas));
+    set('srTotalClicks', pad(s.total_github));
+    set('srOnlineAgora', String(s.online_agora != null ? s.online_agora : (s.onlineAgora || 0)));
+    set('srIpsOnline', String(s.ips_online != null ? s.ips_online : (s.ipsOnline || 0)));
   }
 
   /* GET inicial: pinta totais/tabelas sem contar mais uma visita */
