@@ -393,17 +393,17 @@ const PROJECT_DATA = {
     pathFull:"MT2DEV — eXLib.mix • Gameforge • Client-Side Mod • OpenCV"
   },
   "tbh": {
-    num:"11", path:"TBH TOOLKIT", status:"● 5 CONTAS — SANDBOXIE", title:"TaskBarHero Toolkit",
-    desc:"Oficina para quem joga TaskBarHero a sério: 5 contas isoladas, leitura de saves, gestão de baús e geração de assets sem sair do sistema.",
+    num:"11", path:"TBH TOOLKIT", status:"● N CONTAS — SANDBOXIE", title:"TaskBarHero Toolkit",
+    desc:"Oficina para quem joga TaskBarHero a sério: sandboxes isoladas — quantas quiseres (a minha está com 5 para testar várias farms). Leitura de saves, gestão de baús e geração de assets sem sair do sistema.",
     bullets:[
-      "5 contas (conta1, conta2, conta3, conta4, conta5) via Sandboxie: cada save .es3 isolado em Sandbox\\Dev\\*\\user\\current\\AppData\\LocalLow\\TesseractStudio\\TaskbarHero.",
+      "Sandboxie com N sandboxes — quantas quiseres (ex.: 5 para testar várias farms). Cada save .es3 fica isolado na sua sandbox, sem misturar contas.",
       "Baús em baus.json/history/cache com monitor lock + alerts (min 0.8 / 1 dia), builds em builds.json (tbhindex.com/252/324/338 + mixes 214+153).",
       "analyze_tbh.py: EnumWindows de taskbarhero.exe, GetWindowRect + WS_EX_LAYERED/TRANSPARENT + mss screenshot para % pixels pretos.",
       "extract_*.py para chars/passivos/sprites, icons por tier e _farm_preview.html para pré-visualizar."
     ],
-    arch:"baus.json/history/cache • builds.json • baus_para_importar/ • analyze_tbh.py + extract_{chars,passivos,sprites}.py • abrir_conta1..5.bat + abrir_steam.py • icons* / _farm_preview.html",
+    arch:"baus.json/history/cache • builds.json • baus_para_importar/ • analyze_tbh.py + extract_{chars,passivos,sprites}.py • abrir_conta*.bat + abrir_steam.py • icons* / _farm_preview.html",
     pills:["SANDBOXIE","TASKBAR HERO","MSS","NUMPY","WIN32","PYINSTALLER"],
-    pathFull:"TBH TOOLKIT — Sandboxie • Várias Contas Steam • MSS • Numpy"
+    pathFull:"TBH TOOLKIT — Sandboxie • N Sandboxes • MSS • Numpy"
   },
   "mt2guide": {
     num:"12", path:"MT2GUIDE", status:"◐ BETA FINAL — BUGFIXES", title:"MT2Guide — Quest Helper",

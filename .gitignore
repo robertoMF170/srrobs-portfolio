@@ -2,26 +2,62 @@ node_modules/
 .env
 .freebuff/
 github-setup/
-# segredos / dados pessoais - nunca commitar
-*.log
+
+# ===== segredos / dados pessoais - NUNCA commitar =====
+# tokens / credenciais
+*.token
+.gh_token
+.gh_token.txt
+ghp_*.txt
+credentials*
+secrets*
+*.pem
+*.key
+id_rsa*
+
+# contas / saves do jogo
 *.es3
-ngrok_domain.txt
-farmer_config.json
-config/glm.properties
+*.es3.bak
+*.sav
+savefile*.json
+SaveFile*.es3
+baus.json
 baus_cache.json
 baus_historico.json
+baus_history.json
+builds.json
+farmer_config.json
+config/glm.properties
+ngrok_domain.txt
 events.db
 debug.txt
 shots/
-*.env
-baus.json
-.DS_Store
-Thumbs.db
+capturas/
+screenshots/
+prints/
+sandbox/
+Sandbox/
+
+# logs sempre
+*.log
 app.log
 app.err.log
+loop.log
+
+# estado interno / runtime (nunca vai para o git)
+var/
+
+# ambientes e caches
 __pycache__/
 *.pyc
 .venv/
 venv/
-capturas/
-var/
+env/
+node_modules/
+
+# sistema
+.DS_Store
+Thumbs.db
+desktop.ini
+*.env
+*.env.*
