@@ -1,0 +1,74 @@
+{
+  "devices": {
+    "dev-1": {
+      "_contou": true,
+      "devices": {},
+      "github": 1,
+      "ips": {
+        "127.0.0.1": 2
+      },
+      "last": 1790446953.580549,
+      "online": 1790446953.580549,
+      "visitas": 1
+    },
+    "dev-2": {
+      "_contou": true,
+      "devices": {},
+      "github": 0,
+      "ips": {
+        "203.0.113.7": 1
+      },
+      "last": 1790446953.658941,
+      "online": 1790446953.658941,
+      "visitas": 1
+    },
+    "hw-239ca609-cfff-408e-8797-5f87c9cc4dfd": {
+      "_contou": true,
+      "devices": {},
+      "github": 0,
+      "ips": {
+        "127.0.0.1": 1
+      },
+      "last": 1790446991.3165824,
+      "online": 1790446991.3165824,
+      "visitas": 1
+    },
+    "hw-5b80b280-8b20-4008-805c-50045fb87f31": {
+      "_contou": true,
+      "devices": {},
+      "github": 0,
+      "ips": {
+        "127.0.0.1": 3
+      },
+      "last": 1790447035.2119315,
+      "online": 1790447035.2119315,
+      "visitas": 1
+    }
+  },
+  "ips": {
+    "127.0.0.1": {
+      "_contou": true,
+      "devices": {
+        "dev-1": 2,
+        "hw-239ca609-cfff-408e-8797-5f87c9cc4dfd": 1,
+        "hw-5b80b280-8b20-4008-805c-50045fb87f31": 3
+      },
+      "github": 1,
+      "ips": {},
+      "last": 1790447035.2119315,
+      "online": 1790447035.2119315,
+      "visitas": 1
+    },
+    "203.0.113.7": {
+      "_contou": true,
+      "devices": {
+        "dev-2": 1
+      },
+      "github": 0,
+      "ips": {},
+      "last": 1790446953.658941,
+      "online": 1790446953.658941,
+      "visitas": 1
+    }
+  }
+}
