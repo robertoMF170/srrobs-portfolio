@@ -1,14 +1,10 @@
 @echo off
 setlocal EnableDelayedExpansion
-chcp 65001 >nul 2>&1
-title WATCH — srrobs-portfolio (ate parares)
+title WATCH - srrobs-portfolio (ate parares)
 color 0A
-
-rem autopush-watch.bat — MODO VISUAL “ATE PARAR O PROJETO”
-rem Fica aberto em loop visual: mostra OK a cada verificacao
-rem e quando alteras um ficheiro diz qual foi e faz push.
+rem autopush-watch.bat - MODO VISUAL "ATE PARAR O PROJETO"
+rem Fica aberto em loop visual: mostra quando alteras um ficheiro e faz push.
 rem Fecha so com Ctrl+C ou X.
-rem
 rem Uso:
 rem   duplo clique em autopush-watch.bat          (debounce 4s)
 rem   autopush-watch.bat 2                        (debounce 2s, push mais rapido)
@@ -33,23 +29,11 @@ if /I "%DEBOUNCE%"=="--once" (
 if /I "%DEBOUNCE%"=="--watch" set "DEBOUNCE=%~2"
 if "%DEBOUNCE%"=="" set "DEBOUNCE=4"
 
-rem --- encontra python ---
 set "PY=python"
 where python >nul 2>&1
 if errorlevel 1 (
   where py >nul 2>&1
   if not errorlevel 1 set "PY=py -3"
-)
-where "%PY%" >nul 2>&1 2>nul
-if errorlevel 1 (
-  echo ========================================================
-  echo  ERRO: python nao encontrado no PATH
-  echo  Instala Python 3.10+ e marca "Add to PATH" ou
-  echo  corre: py -3 -X utf8 src\autopush_watch.py
-  echo  REPO: %REPO%
-  echo ========================================================
-  pause
-  exit /b 1
 )
 
 if not exist "%REPO%\src\autopush_watch.py" (
@@ -59,7 +43,7 @@ if not exist "%REPO%\src\autopush_watch.py" (
 )
 
 echo ========================================================
-echo  WATCH — auto-push ate parares o projeto  (VISUAL)
+echo  WATCH - auto-push ate parares o projeto  (VISUAL)
 echo  REPO: %REPO%
 echo  Vigia: index.html / app.js / style.css / visitas_totals.json ...
 echo  Debounce: %DEBOUNCE%s  (espera %DEBOUNCE%s apos gravar antes de push)
@@ -72,17 +56,14 @@ echo.
 :run_watch
 echo [watch] a iniciar...
 echo.
-
-rem --- lança watch (visual, com log na janela) ---
 %PY% -X utf8 "%REPO%\src\autopush_watch.py" --debounce %DEBOUNCE%
 set "RC=%errorlevel%"
-
 echo.
 echo --------------------------------------------------------
 if "%RC%"=="0" (
   echo [watch] parado com codigo 0 (Ctrl+C ou parado normal).
 ) else (
-  echo [watch] saiu com codigo %RC% — pode ter dado erro.
+  echo [watch] saiu com codigo %RC% - pode ter dado erro.
   echo Ultimas linhas do log:
   if exist "%REPO%\autopush.log" powershell -NoProfile -Command "Get-Content -Tail 20 -Encoding utf8 '%REPO%\autopush.log'" 2>nul
   echo.
@@ -90,7 +71,6 @@ if "%RC%"=="0" (
   timeout /t 3 >nul
   goto run_watch
 )
-
 echo.
 echo Pressiona qualquer tecla para fechar (ou fecha o X).
 pause >nul

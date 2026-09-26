@@ -1,4 +1,4 @@
-' autopush-silent.vbs — executa tarefa oculta (sem janela a piscar)
+' autopush-silent.vbs - executa tarefa oculta (sem janela a piscar)
 ' 1 ciclo:      wscript autopush-silent.vbs
 '               duplo clique -> 1 push
 ' loop X seg:   wscript autopush-silent.vbs --loop 60
@@ -42,7 +42,7 @@ If a0 = "--once" Then
   WScript.Quit 0
 End If
 
-' se 1o arg é um .bat/.cmd legado, delega
+' se 1o arg e um .bat/.cmd legado, delega
 If InStr(a0, ".bat") > 0 Or InStr(a0, ".cmd") > 0 Then
   target = WScript.Arguments(0)
   args = ""
