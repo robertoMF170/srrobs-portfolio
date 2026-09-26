@@ -4,7 +4,7 @@
 
 ![Design](https://img.shields.io/badge/design-brutalist_OS-black) ![Colors](https://img.shields.io/badge/preto-%23070707-black) ![Red](https://img.shields.io/badge/vermelho-%23E30613-red) ![Lenis](https://img.shields.io/badge/Lenis-smooth_scroll-blue)
 
-Live: `https://SEU_USER.github.io/SEU_REPO` (após ativar GitHub Pages)
+Live: `https://robertomf170.github.io/srrobs-portfolio` (após ativar GitHub Pages)
 
 ## O que tem
 
@@ -21,8 +21,8 @@ HTML + CSS + JS vanilla, Lenis 1.1.18 (smooth scroll), Space Grotesk + JetBrains
 ## Como correr local
 
 ```bash
-git clone https://github.com/SEU_USER/SEU_REPO.git
-cd SEU_REPO
+git clone https://github.com/robertoMF170/srrobs-portfolio.git
+cd srrobs-portfolio
 # Sem build — só abrir
 start index.html        # Windows
 open index.html         # Mac
@@ -34,7 +34,7 @@ python -m http.server 8000
 
 ## Como publicar no GitHub Pages
 
-1. No repo `SEU_REPO` → `Settings` → `Pages`.
+1. No repo `srrobs-portfolio` → `Settings` → `Pages`.
 2. `Source: Deploy from a branch` → `Branch: main` → `/ (root)` → Save.
 3. Aguarda 1–2 min → URL aparece no topo de `Pages`.
 
@@ -68,4 +68,4 @@ app.js          # Lenis + reveals + cursor + magnetic + filtros + PLACEHOLDER_DA
 
 ## Autor
 
-Utilizador (Dev) — https://github.com/SEU_USER · Inspirado em https://ewan-kerboas.fr
+Utilizador (Dev) — https://github.com/robertoMF170 · Inspirado em https://ewan-kerboas.fr
