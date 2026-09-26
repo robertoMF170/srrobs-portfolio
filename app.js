@@ -699,6 +699,7 @@ updateActiveNav();
     } catch (e) {}
   }
 
+  // So contagem em cima (hero) — sem tabelas por IP/HWID (dados pessoais)
   function paint(s) {
     if (!s) return;
     function set(id, v) {
@@ -707,41 +708,11 @@ updateActiveNav();
     }
     var pad = function (n) { return String(n).padStart(3, '0'); };
     set('visitCount', pad(s.total_visitas));
-    set('uniqueCount', pad((s.por_device || []).length));
+    var uniq = (s.por_device || []).length;
+    if (s.total_devices != null) uniq = s.total_devices;
+    else if (s.totalDevices != null) uniq = s.totalDevices;
+    set('uniqueCount', pad(uniq));
     set('githubOpens', pad(s.total_github));
-    /* Painel #visitas — totais por IP / HWID */
-    set('srTotalIps', pad((s.por_ip || []).length));
-    set('srTotalDevices', pad((s.por_device || []).length));
-    set('srTotalVisitas', pad(s.total_visitas));
-    set('srTotalClicks', pad(s.total_github));
-    set('srOnlineAgora', String(s.online_agora || 0));
-    set('srIpsOnline', String(s.ips_online || 0));
-    buildTabela('srTabelaIp', s.por_ip || []);
-    buildTabela('srTabelaHwid', s.por_device || []);
-  }
-
-  /* Tabela por IP / por HWID: id truncado, visitas, clicks, dot online, visto há quanto */
-  function buildTabela(tbodyId, rows) {
-    var tb = document.getElementById(tbodyId);
-    if (!tb) return;
-    tb.innerHTML = rows.map(function (r) {
-      var id = String(r.id || '?');
-      var short = id.length > 12 ? id.slice(0, 11) + '…' : id;
-      return '<tr><td title="' + id + '">' + short + '</td>' +
-        '<td>' + (r.visitas || 0) + '</td>' +
-        '<td>' + (r.github || 0) + '</td>' +
-        '<td><span class="sr-dot ' + (r.online ? 'on' : 'off') + '"></span></td>' +
-        '<td>' + relTime(r.last) + '</td></tr>';
-    }).join('');
-  }
-
-  function relTime(ts) {
-    if (!ts) return '—';
-    var d = Math.max(0, Date.now() / 1000 - ts);
-    if (d < 60) return Math.floor(d) + 's';
-    if (d < 3600) return Math.floor(d / 60) + 'm';
-    if (d < 86400) return Math.floor(d / 3600) + 'h';
-    return Math.floor(d / 86400) + 'd';
   }
 
   /* GET inicial: pinta totais/tabelas sem contar mais uma visita */
