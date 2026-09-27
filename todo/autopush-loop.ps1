@@ -16,8 +16,10 @@ $repo = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
 Set-Location $repo
 
 $descriptionPath = 'todo/repository-description.txt'
+$dataPath = 'data/projetos.json'
+$generatedPaths = @($descriptionPath, $dataPath)
 $descriptionMaxLength = 350
-$expectedCommitSubject = 'chore: update redacted repository description'
+$expectedCommitSubject = 'chore: update generated redacted portfolio data'
 $protectedPaths = @(
     'index.html', 'app.js', 'style.css', 'favicon.svg', 'og-image.svg',
     '404.html', 'robots.txt', 'sitemap.xml', '.nojekyll', 'README.md',
@@ -77,6 +79,91 @@ function Get-RedactedReadmeDescription {
         $description = $description.Substring(0, $descriptionMaxLength).TrimEnd()
     }
     return $description
+}
+
+function Get-CensoredText([string] $Text) {
+    # Removes URLs, drives/paths, e-mails and @mentions so nothing personal can leave the README.
+    if ([string]::IsNullOrWhiteSpace($Text)) { return '' }
+    $clean = $Text
+    $clean = [regex]::Replace($clean, '(?i)https?://\S+', ' ')
+    $clean = [regex]::Replace($clean, '(?i)\b[A-Za-z]:\\\S*', ' ')
+    $clean = [regex]::Replace($clean, '(?i)\b[\w.+-]+@[\w-]+\.[\w.-]+', ' ')
+    $clean = [regex]::Replace($clean, '@[\w-]+', ' ')
+    $clean = $clean.Replace('\', ' ')
+    $clean = [regex]::Replace($clean, '\s+', ' ')
+    $clean = $clean.Trim()
+    if ($clean.Length -gt 120) { $clean = $clean.Substring(0, 120).TrimEnd() }
+    return $clean
+}
+
+function Get-ReadmeProjectRows {
+    $lines = Get-Content -LiteralPath (Join-Path $repo 'README.md') -Encoding UTF8
+    $rows = @()
+    foreach ($line in $lines) {
+        if ($line -notmatch '^\s*\|') { continue }
+        $cells = @($line.Split('|') | ForEach-Object { $_.Trim() } | Where-Object { $_ -ne '' })
+        if ($cells.Count -ne 4) { continue }
+        if ($cells[0] -notmatch '^\d+$') { continue }
+        $stack = @($cells[3].Split(',') | ForEach-Object { Get-CensoredText $_ } | Where-Object { $_ -ne '' })
+        $rows += [pscustomobject][ordered]@{
+            num = $cells[0].PadLeft(2, '0')
+            titulo = Get-CensoredText $cells[1]
+            etiqueta = Get-CensoredText $cells[2]
+            stack = $stack
+        }
+    }
+    return $rows
+}
+
+function ConvertTo-CompactJson($Value) {
+    return ($Value | ConvertTo-Json -Depth 6 -Compress)
+}
+
+function Get-DiskContent([string] $RelativePath) {
+    $full = Join-Path $repo $RelativePath
+    if (-not (Test-Path -LiteralPath $full)) { return $null }
+    return ([IO.File]::ReadAllText($full)).Trim()
+}
+
+function Set-ProjectsData {
+    # Builds the censored site data from the README table only. Rewrites the file only when the
+    # data actually changes, so a stable loop does not create empty commits every cycle.
+    $dataFull = Join-Path $repo $dataPath
+    $rows = @(Get-ReadmeProjectRows)
+    $documented = $rows.Count
+    $repositories = $documented + 1  # inclui este próprio repositório de portefólio
+    $core = [ordered]@{
+        repositorios = $repositories
+        projetos_documentados = $documented
+        projetos = $rows
+    }
+
+    $existing = $null
+    if (Test-Path -LiteralPath $dataFull) {
+        try { $existing = Get-Content -LiteralPath $dataFull -Raw -Encoding UTF8 | ConvertFrom-Json } catch { $existing = $null }
+    }
+    if ($null -ne $existing) {
+        $existingCore = [ordered]@{
+            repositorios = $existing.repositorios
+            projetos_documentados = $existing.projetos_documentados
+            projetos = $existing.projetos
+        }
+        if ((ConvertTo-CompactJson $existingCore) -ceq (ConvertTo-CompactJson $core)) {
+            Write-Host ("Estado do site já atualizado: {0} repositórios, {1} projetos documentados (sem alterações)." -f $repositories, $documented) -ForegroundColor DarkGray
+            return
+        }
+    }
+
+    $payload = [ordered]@{
+        gerado_em = (Get-Date -Format 'yyyy-MM-dd HH:mm')
+        repositorios = $repositories
+        projetos_documentados = $documented
+        projetos = $rows
+    }
+    $directory = Split-Path -Parent $dataFull
+    if (-not (Test-Path -LiteralPath $directory)) { New-Item -ItemType Directory -Path $directory -Force | Out-Null }
+    [IO.File]::WriteAllText($dataFull, (ConvertTo-CompactJson $payload) + "`n", $script:Utf8NoBom)
+    Write-Host ("Dados do site gerados (censurado): {0} repositórios, {1} projetos documentados." -f $repositories, $documented) -ForegroundColor Green
 }
 
 function Invoke-GitChecked([string[]] $Arguments) {
@@ -255,15 +342,20 @@ function Get-AheadCount([string] $Upstream) {
     return $count
 }
 
-function Test-PendingCommitSafe([string] $Upstream, [string] $Description) {
+function Test-PendingCommitSafe([string] $Upstream, $ExpectedFiles) {
     if ((Get-AheadCount $Upstream) -ne 1) { return $false }
     $subject = Invoke-NativeCommand 'git' @('log', '-1', '--format=%s')
     if ($subject.ExitCode -ne 0 -or $subject.Output.Count -eq 0 -or $subject.Output[0] -cne $expectedCommitSubject) { return $false }
     $paths = Invoke-NativeCommand 'git' @('diff', '--name-only', ($Upstream + '..HEAD'))
-    if ($paths.ExitCode -ne 0 -or $paths.Output.Count -ne 1 -or $paths.Output[0] -cne $descriptionPath) { return $false }
-    $committed = Invoke-NativeCommand 'git' @('show', ('HEAD:' + $descriptionPath))
-    if ($committed.ExitCode -ne 0) { return $false }
-    return (($committed.Output -join "`n").Trim() -ceq $Description)
+    if ($paths.ExitCode -ne 0 -or $paths.Output.Count -eq 0) { return $false }
+    foreach ($path in $paths.Output) {
+        $normalized = $path.Trim().Replace('\', '/')
+        if (-not $ExpectedFiles.ContainsKey($normalized)) { return $false }
+        $committed = Invoke-NativeCommand 'git' @('show', ('HEAD:' + $normalized))
+        if ($committed.ExitCode -ne 0) { return $false }
+        if ((($committed.Output -join "`n").Trim()) -cne $ExpectedFiles[$normalized]) { return $false }
+    }
+    return $true
 }
 
 function Update-Description([string] $Description) {
@@ -280,6 +372,14 @@ function Invoke-AuditCycle {
 
     $description = Get-RedactedReadmeDescription
     Update-Description $description
+    Set-ProjectsData
+
+    $expected = @{}
+    foreach ($generatedPath in $generatedPaths) {
+        $content = Get-DiskContent $generatedPath
+        if ($null -ne $content) { $expected[$generatedPath] = $content }
+    }
+
     $entries = @(Get-ChangedEntries)
     if ($entries.Count -gt 0) { Write-SafeChangeSummary $entries }
 
@@ -289,8 +389,8 @@ function Invoke-AuditCycle {
         return
     }
 
-    if (Test-PendingCommitSafe $upstream $description) {
-        Write-Host 'Commit pendente confirmado: contém apenas a descrição censurada gerada.' -ForegroundColor Cyan
+    if (Test-PendingCommitSafe $upstream $expected) {
+        Write-Host 'Commit pendente confirmado: contém apenas dados gerados e censurados.' -ForegroundColor Cyan
         $push = Invoke-NativeCommand 'git' @('push')
         if ($push.ExitCode -eq 0) { Write-Host 'Push concluído.' -ForegroundColor Green }
         else { Write-Host ("Push falhou (código {0}); será tentado novamente no próximo ciclo." -f $push.ExitCode) -ForegroundColor Yellow }
@@ -306,13 +406,14 @@ function Invoke-AuditCycle {
         return
     }
 
-    # Site, README, and all user-created files remain untouched. Only the generated text file
-    # can be committed; unknown personal data cannot accidentally enter a push.
-    if ($entries.Count -ne 1 -or $entries[0].Path -cne $descriptionPath) {
-        Write-Host 'Commit bloqueado: há alterações além da descrição gerada. Nada foi staged, commitado ou enviado.' -ForegroundColor Yellow
+    # Site, README, src/, tests/ and all user-created files remain untouched. Only the generated,
+    # censored files can be committed; unknown personal data cannot accidentally enter a push.
+    $unknown = @($entries | Where-Object { $generatedPaths -notcontains $_.Path })
+    if ($unknown.Count -gt 0) {
+        Write-Host 'Commit bloqueado: há alterações além dos ficheiros gerados. Nada foi staged, commitado ou enviado.' -ForegroundColor Yellow
         return
     }
-    if (Test-ProtectedPath $entries[0].Path) {
+    if (@($entries | Where-Object { Test-ProtectedPath $_.Path }).Count -gt 0) {
         Write-Host 'Commit bloqueado por proteção de caminho.' -ForegroundColor Yellow
         return
     }
@@ -328,19 +429,26 @@ function Invoke-AuditCycle {
         return
     }
 
-    Invoke-GitChecked @('add', '--', $descriptionPath)
+    Invoke-GitChecked (@('add', '--') + $generatedPaths)
     $staged = Invoke-NativeCommand 'git' @('diff', '--cached', '--name-only')
-    if ($staged.ExitCode -ne 0 -or $staged.Output.Count -ne 1 -or $staged.Output[0] -cne $descriptionPath) {
+    if ($staged.ExitCode -ne 0 -or $staged.Output.Count -eq 0) {
         Write-Host 'Verificação do staging falhou; não foi criado commit.' -ForegroundColor Yellow
         return
     }
-    $stagedContent = Invoke-NativeCommand 'git' @('show', (':' + $descriptionPath))
-    if ($stagedContent.ExitCode -ne 0 -or (($stagedContent.Output -join "`n").Trim() -cne $description)) {
-        Write-Host 'Conteúdo staged não corresponde à descrição censurada; commit bloqueado.' -ForegroundColor Yellow
-        return
+    foreach ($stagedPath in $staged.Output) {
+        $normalized = $stagedPath.Trim().Replace('\', '/')
+        if (-not $expected.ContainsKey($normalized)) {
+            Write-Host 'Verificação do staging falhou; não foi criado commit.' -ForegroundColor Yellow
+            return
+        }
+        $stagedContent = Invoke-NativeCommand 'git' @('show', (':' + $normalized))
+        if ($stagedContent.ExitCode -ne 0 -or (($stagedContent.Output -join "`n").Trim() -cne $expected[$normalized])) {
+            Write-Host 'Conteúdo staged não corresponde ao gerado; commit bloqueado.' -ForegroundColor Yellow
+            return
+        }
     }
 
-    Write-Host 'Commit seguro: apenas a descrição gerada a partir de tecnologias permitidas.' -ForegroundColor Cyan
+    Write-Host 'Commit seguro: apenas dados gerados e censurados.' -ForegroundColor Cyan
     Invoke-GitChecked @('commit', '-m', $expectedCommitSubject)
     Write-Host 'Commit criado. A enviar para o remote...' -ForegroundColor Green
     $push = Invoke-NativeCommand 'git' @('push')
@@ -351,7 +459,7 @@ function Invoke-AuditCycle {
     }
 }
 
-Write-Host 'Loop seguro iniciado. O site e README nunca são commitados ou enviados. Ctrl+C para parar.' -ForegroundColor Green
+Write-Host 'Loop seguro iniciado. O site e o README nunca são editados; só os dados gerados e censurados (descrição + data/projetos.json) são commitados. Ctrl+C para parar.' -ForegroundColor Green
 Write-Host ("Ciclo: {0} segundos. Usa -Once para executar apenas um ciclo." -f $IntervalSeconds) -ForegroundColor Green
 if ($Once) {
     try { Invoke-AuditCycle } catch { Write-LoopError $_; exit 1 }

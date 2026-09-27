@@ -411,7 +411,13 @@
         </div>
 
         <div class="projects-foot">
-          <span>13 projetos • de trading a games — todos com stack, arquitetura e detalhes documentados.</span>
+          <span><span id="estadoProjetosFoot">13</span> projetos • <span id="estadoReposFoot">14</span> repositórios — stack, arquitetura e detalhes documentados.</span>
+        </div>
+
+        <div class="estado-atual" id="estadoAtual">
+          <h4 class="estado-titulo">ESTADO ATUAL — atualizado automaticamente pelo loop</h4>
+          <p class="estado-resumo" id="estadoResumo">A carregar data/projetos.json…</p>
+          <div class="estado-lista" id="estadoLista"></div>
         </div>
       </div>
     </section>
@@ -556,6 +562,57 @@
     </div>
   </div>
 
+<style>
+  .estado-atual{margin-top:18px;padding:16px;border:1px solid #1a1a1a;background:#0b0b0b;font-family:'JetBrains Mono',monospace}
+  .estado-titulo{margin:0 0 8px;font-size:10px;letter-spacing:2px;color:#9a9a9a;font-weight:400}
+  .estado-resumo{margin:0 0 12px;font-size:12px;color:#F4F4F2}
+  .estado-lista{display:flex;flex-direction:column;gap:8px}
+  .estado-item{display:flex;flex-wrap:wrap;align-items:center;gap:6px;font-size:12px;color:#F4F4F2}
+  .estado-item-titulo{font-weight:600;margin-right:6px}
+</style>
+
+<script>
+/* Estado atual censurado — lido de data/projetos.json (gerado pelo loop a partir do README). */
+(function () {
+  var resumo = document.getElementById('estadoResumo');
+  var lista = document.getElementById('estadoLista');
+  function setText(id, value) { var el = document.getElementById(id); if (el) el.textContent = value; }
+  fetch('data/projetos.json', { cache: 'no-store' })
+    .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+    .then(function (d) {
+      var n = d.projetos_documentados || (d.projetos ? d.projetos.length : 0);
+      var repos = d.repositorios || n;
+      setText('filterCount', n);
+      setText('estadoProjetosFoot', n);
+      setText('estadoReposFoot', repos);
+      var todos = document.querySelector('.filter-btn[data-filter="all"] span');
+      if (todos) todos.textContent = n;
+      if (resumo) resumo.textContent = repos + ' repositórios • ' + n + ' projetos documentados'
+        + (d.gerado_em ? ' • dados de ' + d.gerado_em : '');
+      if (lista && d.projetos) {
+        lista.innerHTML = '';
+        d.projetos.forEach(function (p) {
+          var item = document.createElement('div');
+          item.className = 'estado-item';
+          var head = document.createElement('span');
+          head.className = 'estado-item-titulo';
+          head.textContent = p.num + ' · ' + p.titulo;
+          item.appendChild(head);
+          (p.stack || []).forEach(function (s) {
+            var pill = document.createElement('span');
+            pill.className = 'pill';
+            pill.textContent = s;
+            item.appendChild(pill);
+          });
+          lista.appendChild(item);
+        });
+      }
+    })
+    .catch(function () {
+      if (resumo) resumo.textContent = 'Não foi possível ler data/projetos.json — abre o site por servidor local (ex.: python -m http.server).';
+    });
+})();
+</script>
 <script src="app.js"></script>
 </body>
 </html>
