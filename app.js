@@ -828,12 +828,15 @@ updateActiveNav();
       if(footProjetos) footProjetos.textContent = total;
       // Todos os textos de contagem ficam ligados ao JSON (hero, sobre, contacto, navigation).
       document.querySelectorAll('.js-doc').forEach(el=>{ el.textContent = total; });
-      const stat = document.querySelector('.about-stats [data-count]');
-      if(stat){
+      document.querySelectorAll('.about-stats [data-count]').forEach(stat=>{
         stat.setAttribute('data-count', total);
         const sec = stat.closest('.reveal');
         if(sec && sec.classList.contains('in')) stat.textContent = total;
-      }
+        // Rede de seguranca: se o observador de reveal nao disparar, garante o numero final.
+        setTimeout(()=>{
+          if(!stat.dataset.done){ stat.dataset.done = '1'; stat.textContent = total; }
+        }, 1500);
+      });
       ['meta[name="description"]','meta[property="og:title"]','meta[property="og:description"]','meta[name="twitter:title"]'].forEach(sel=>{
         const el = document.querySelector(sel);
         if(!el) return;

@@ -11,7 +11,7 @@ Live: `https://robertomf170.github.io/srrobs-portfolio` (após ativar GitHub Pag
 - **Loader** `SRROBS_OS — BOOT` com barra + `%` + wipe.
 - **Taskbar** fixa + **marquee** de stack + **scroll-progress** vermelho.
 - **Hero** com tipografia `Space Grotesk` + **Stagger** linha a linha.
-- **13 projetos mapeados** em grelha filtrável (`TODOS / TRADING / GAMES / BOTS / UTILS`) + **modal** com “O que faz + Arquitetura + ficheiros-chave” — tudo já documentado do `D:\`.
+- **14 projetos mapeados** em grelha filtrável (`TODOS / TRADING / GAMES / BOTS / UTILS`) + **modal** com “O que faz + Arquitetura + ficheiros-chave” — tudo já documentado do `D:\`.
 - **Animações premium**: Lenis smooth scroll, parallax grid, cursor custom (anel+dot), magnetic nos botões, tilt 3D nas janelas, reveals por `IntersectionObserver`.
 
 ## Stack
@@ -41,12 +41,12 @@ python -m http.server 8000
 ## Estrutura
 
 ```
-index.html      # 4 janelas: hero, sobre, projetos (13 cards gerados + filtros), stack, contacto + modal
+index.html      # 4 janelas: hero, sobre, projetos (14 cards gerados + filtros), stack, contacto + modal
 style.css       # brutalist OS: --black #070707, --white #F4F4F2, --red #E30613
-app.js          # Lenis + reveals + cursor + magnetic + filtros + grelha (13) de data/projetos.json + tilt
+app.js          # Lenis + reveals + cursor + magnetic + filtros + grelha (14) de data/projetos.json + tilt
 ```
 
-## Projetos documentados (13)
+## Projetos documentados (14)
 
 | # | Nome | Badge | Stack |
 |---|---|---|---|
@@ -63,6 +63,7 @@ app.js          # Lenis + reveals + cursor + magnetic + filtros + grelha (13) de
 | 11 | TaskBarHero Toolkit | TBH TOOLKIT | Sandboxie, mss |
 | 12 | MT2Guide — Quest Helper | MT2GUIDE | eXLib.mix, Python, Client-side |
 | 13 | Laboratório de Testes e Análises — CSGO500 (Casino) | CSGO500 — CASINO | Tampermonkey, OpenCV |
+| 14 | srrobs portfolio | PYTHON | PYTHON |
 
 > Cada card → `VER DETALHES ↗` → modal com bullets do que cada projeto **é e faz** (sem `D:\`, sem lore de disco).
 

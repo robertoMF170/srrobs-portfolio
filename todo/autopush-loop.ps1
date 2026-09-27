@@ -97,23 +97,106 @@ function Get-CensoredText([string] $Text) {
     return $clean
 }
 
-function Get-ReadmeProjectRows {
-    $lines = Get-Content -LiteralPath (Join-Path $repo 'README.md') -Encoding UTF8
-    $rows = @()
-    foreach ($line in $lines) {
-        if ($line -notmatch '^\s*\|') { continue }
-        $cells = @($line.Split('|') | ForEach-Object { $_.Trim() } | Where-Object { $_ -ne '' })
-        if ($cells.Count -ne 4) { continue }
-        if ($cells[0] -notmatch '^\d+$') { continue }
-        $stack = @($cells[3].Split(',') | ForEach-Object { Get-CensoredText $_ } | Where-Object { $_ -ne '' })
-        $rows += [pscustomobject][ordered]@{
-            num = $cells[0].PadLeft(2, '0')
-            titulo = Get-CensoredText $cells[1]
-            etiqueta = Get-CensoredText $cells[2]
-            stack = $stack
-        }
+function Get-ProjectRepoName($Project) {
+    # Repository a card belongs to: explicit 'repo' field first, else derived from its GitHub link.
+    if ($null -eq $Project) { return '' }
+    if ($Project.PSObject.Properties.Name -contains 'repo') {
+        $explicit = [string] $Project.repo
+        if ($explicit) { return $explicit }
     }
-    return $rows
+    if ($Project.PSObject.Properties.Name -contains 'link') {
+        $link = [string] $Project.link
+        if ($link -match 'github\.com/[^/]+/([^/?#]+)') { return ($matches[1] -replace '\.git$', '') }
+    }
+    return ''
+}
+
+function Get-GitHubPublicRepos {
+    # Public repositories of the portfolio owner, so the grid and the counts track GitHub.
+    $slug = Get-GitHubRepositorySlug
+    if (-not $slug) { return @() }
+    $owner = ($slug -split '/')[0]
+    $uri = 'https://api.github.com/users/' + $owner + '/repos?per_page=100&sort=updated&affiliation=owner'
+    $previousProtocols = [Net.ServicePointManager]::SecurityProtocol
+    try {
+        [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+        $response = Invoke-RestMethod -Uri $uri -Method Get -Headers @{ Accept = 'application/vnd.github+json'; 'User-Agent' = 'srrobs-autopush-loop' } -TimeoutSec 15 -UseBasicParsing
+        return @($response)
+    } catch {
+        # Sem rede / limite de API: mantém o estado atual em vez de falhar.
+        return @()
+    } finally {
+        [Net.ServicePointManager]::SecurityProtocol = $previousProtocols
+    }
+}
+
+function New-RepoProjectCard($RepoInfo, [string] $Num) {
+    # Censored plain-text card for a repository that has no curated entry yet.
+    $name = [string] $RepoInfo.name
+    $description = Get-CensoredText ([string] $RepoInfo.description)
+    if (-not $description) { $description = 'Repositório detetado automaticamente pelo loop.' }
+    $language = [string] $RepoInfo.language
+    $pills = @()
+    if ($language) { $pills += $language.ToUpperInvariant() }
+    foreach ($topic in @($RepoInfo.topics)) { if ($topic) { $pills += ([string] $topic).ToUpperInvariant() } }
+    if ($pills.Count -eq 0) { $pills = @('GITHUB') }
+    $suffix = ''
+    if ($language) { $suffix = ' • ' + $language }
+    $title = @(($name -replace '[-_]+', ' ').Trim() -split ' ' | Where-Object { $_ } | ForEach-Object {
+        $_.Substring(0, 1).ToUpperInvariant() + $_.Substring(1)
+    }) -join ' '
+    return [pscustomobject][ordered]@{
+        num = $Num
+        slug = $name
+        repo = $name
+        titulo = $title
+        etiqueta = $(if ($language) { $language.ToUpperInvariant() } else { 'GITHUB' })
+        status = '● NOVO — GITHUB'
+        categoria = ''
+        featured = $false
+        desc = Escape-HtmlText $description
+        arch = Escape-HtmlText ($name + $suffix)
+        pills = @($pills)
+        link = [string] $RepoInfo.html_url
+        descModal = $description
+        archModal = ($name + $suffix)
+        bullets = @()
+        path = $name.ToUpperInvariant()
+        pathFull = ($name + $suffix)
+    }
+}
+
+function Sync-ReadmeTable($Projetos) {
+    # Appends a README table row for any project that has none yet, so the table never lags
+    # behind the repository list. Existing (curated) rows are never rewritten.
+    $readmeFull = Join-Path $repo 'README.md'
+    if (-not (Test-Path -LiteralPath $readmeFull)) { return }
+    $text = [IO.File]::ReadAllText($readmeFull)
+    $knownNums = @{}
+    $tableRows = [regex]::Matches($text, '(?m)^[^\S\r\n]*\|[^\r\n]*(?:\r?\n|$)')
+    if ($tableRows.Count -eq 0) { return }
+    foreach ($row in $tableRows) {
+        $cells = [regex]::Match($row.Value, '^[^\S\r\n]*\|\s*(\d+)\s*\|')
+        if ($cells.Success) { $knownNums[[string] ([int] $cells.Groups[1].Value)] = $true }
+    }
+    $newline = "`n"
+    if ($text -match "`r`n") { $newline = "`r`n" }
+    $newRows = @()
+    foreach ($entry in $Projetos) {
+        if ([string] $entry.num -notmatch '^\d+$') { continue }
+        if ($knownNums.ContainsKey([string] ([int] $entry.num))) { continue }
+        $stack = (@($entry.pills) -join ', ')
+        $newRows += ('| ' + $entry.num + ' | ' + ($entry.titulo -replace '\|', '/') + ' | ' + ($entry.etiqueta -replace '\|', '/') + ' | ' + ($stack -replace '\|', '/') + ' |')
+    }
+    if ($newRows.Count -eq 0) { return }
+    $last = $tableRows[$tableRows.Count - 1]
+    $insertAt = $last.Index + $last.Length
+    $block = (($newRows -join $newline) + $newline)
+    $updated = $text.Substring(0, $insertAt) + $block + $text.Substring($insertAt)
+    if ($updated -cne $text) {
+        [IO.File]::WriteAllText($readmeFull, $updated, $script:Utf8NoBom)
+        Write-Host ("Tabela do README sincronizada com os repositórios: {0} linha(s) nova(s)." -f $newRows.Count) -ForegroundColor Green
+    }
 }
 
 function ConvertTo-CompactJson($Value) {
@@ -132,50 +215,59 @@ function Escape-HtmlText([string] $Text) {
 }
 
 function Set-ProjectsData {
-    # Merges the README table into the censored site data. Curated entries are never touched;
-    # README projects that are not present yet are appended as new (censored, plain text) cards.
+    # Merges the censored curated data with the real GitHub repository list. Curated entries are
+    # never overwritten (only their links are refreshed) and every public repository without a
+    # card gets a new censored card, so the grid and the count always track GitHub.
     # The file is rewritten only when the merged data actually changes.
     $dataFull = Join-Path $repo $dataPath
-    $rows = @(Get-ReadmeProjectRows)
 
     $existingProjetos = @()
-    $existing = $null
+    $existingJson = $null
     if (Test-Path -LiteralPath $dataFull) {
         try {
             $existing = Get-Content -LiteralPath $dataFull -Raw -Encoding UTF8 | ConvertFrom-Json
             $existingProjetos = @($existing.projetos)
-        } catch { $existing = $null; $existingProjetos = @() }
+            # Snapshot before mutating, so a link refresh still counts as a change.
+            $existingJson = ConvertTo-CompactJson ([ordered]@{
+                projetos_documentados = $existing.projetos_documentados
+                projetos = $existingProjetos
+            })
+        } catch { $existingJson = $null; $existingProjetos = @() }
     }
 
-    $knownNums = @{}
-    foreach ($entry in $existingProjetos) {
-        if ($entry.num) { $knownNums[[string] $entry.num] = $true }
-    }
+    $repos = @(Get-GitHubPublicRepos)
+    $reposByName = @{}
+    foreach ($item in $repos) { $reposByName[[string] $item.name] = $item }
 
+    $coveredRepos = @{}
     $projetos = New-Object System.Collections.ArrayList
-    foreach ($entry in $existingProjetos) { [void] $projetos.Add($entry) }
-    foreach ($row in $rows) {
-        if ($knownNums.ContainsKey([string] $row.num)) { continue }
-        $stackList = @($row.stack)
-        [void] $projetos.Add([pscustomobject][ordered]@{
-            num = $row.num
-            slug = 'projeto-' + $row.num
-            titulo = $row.titulo
-            etiqueta = $row.etiqueta
-            status = '● NOVO — DOCUMENTADO'
-            categoria = ''
-            featured = $false
-            desc = 'Projeto documentado no README. Stack: ' + (Escape-HtmlText ($stackList -join ', ')) + '.'
-            arch = Escape-HtmlText ($stackList -join ' • ')
-            pills = @($stackList | ForEach-Object { $_.ToUpperInvariant() })
-            link = ''
-            descModal = ''
-            archModal = ''
-            bullets = @()
-            path = $row.etiqueta
-            pathFull = $row.titulo
-        })
-        $knownNums[[string] $row.num] = $true
+    foreach ($entry in $existingProjetos) {
+        $repoName = Get-ProjectRepoName $entry
+        if ($repoName) {
+            $coveredRepos[$repoName] = $true
+            $repoInfo = $reposByName[$repoName]
+            # A card never points at a renamed or deleted repository.
+            if ($null -ne $repoInfo -and ($entry.PSObject.Properties.Name -contains 'link')) {
+                $entry.link = [string] $repoInfo.html_url
+            }
+        }
+        [void] $projetos.Add($entry)
+    }
+
+    $nextNum = 1
+    foreach ($entry in $projetos) {
+        if ([string] $entry.num -match '^\d+$') {
+            $value = [int] $entry.num
+            if ($value -ge $nextNum) { $nextNum = $value + 1 }
+        }
+    }
+
+    foreach ($item in $repos) {
+        $repoName = [string] $item.name
+        if ($coveredRepos.ContainsKey($repoName)) { continue }
+        [void] $projetos.Add((New-RepoProjectCard $item (([string] $nextNum).PadLeft(2, '0'))))
+        $coveredRepos[$repoName] = $true
+        $nextNum++
     }
 
     $documented = $projetos.Count
@@ -184,16 +276,12 @@ function Set-ProjectsData {
         projetos = $projetos
     }
 
-    if ($null -ne $existing) {
-        $existingCore = [ordered]@{
-            projetos_documentados = $existing.projetos_documentados
-            projetos = $existingProjetos
-        }
-        if ((ConvertTo-CompactJson $existingCore) -ceq (ConvertTo-CompactJson $core)) {
-            $script:SiteDocumented = $documented
-            Write-Host ("Estado do site já atualizado: {0} projetos mapeados (sem alterações)." -f $documented) -ForegroundColor DarkGray
-            return
-        }
+    Sync-ReadmeTable $projetos
+
+    if ($null -ne $existingJson -and $existingJson -ceq (ConvertTo-CompactJson $core)) {
+        $script:SiteDocumented = $documented
+        Write-Host ("Estado do site já atualizado: {0} projetos mapeados (sem alterações)." -f $documented) -ForegroundColor DarkGray
+        return
     }
 
     $script:SiteDocumented = $documented
@@ -237,7 +325,8 @@ function Sync-CountTexts([int] $Documented) {
         )
         'og-image.svg' = @(
             @{ Pattern = '\d+( projetos reais)'; Replacement = ([string] $Documented + '$1') },
-            @{ Pattern = '\d+( projetos documentados)'; Replacement = ([string] $Documented + '$1') }
+            @{ Pattern = '\d+( projetos documentados)'; Replacement = ([string] $Documented + '$1') },
+            @{ Pattern = '\d+( PROJETOS MAPEADOS)'; Replacement = ([string] $Documented + '$1') }
         )
     }
     foreach ($relative in $countSyncPaths) {
