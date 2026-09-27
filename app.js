@@ -788,7 +788,6 @@ updateActiveNav();
   const grid = document.getElementById('projectsGrid');
   if(!grid) return;
   const footProjetos = document.getElementById('estadoProjetosFoot');
-  const footRepos = document.getElementById('estadoReposFoot');
   const escHtml = (s)=> String(s==null?'':s).replace(/[&<>"]/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
   const statusClass = (s)=> /^\s*●/.test(s||'') ? 'active' : 'warn';
   function cardHtml(p){
@@ -825,13 +824,10 @@ updateActiveNav();
         };
       });
       const total = d.projetos_documentados||projetos.length;
-      const repos = d.repositorios||total;
       if(filterCountEl) filterCountEl.textContent = total;
       if(footProjetos) footProjetos.textContent = total;
-      if(footRepos) footRepos.textContent = repos;
       // Todos os textos de contagem ficam ligados ao JSON (hero, sobre, contacto, navigation).
       document.querySelectorAll('.js-doc').forEach(el=>{ el.textContent = total; });
-      document.querySelectorAll('.js-repos').forEach(el=>{ el.textContent = repos; });
       const stat = document.querySelector('.about-stats [data-count]');
       if(stat){
         stat.setAttribute('data-count', total);

@@ -179,39 +179,33 @@ function Set-ProjectsData {
     }
 
     $documented = $projetos.Count
-    $repositories = $documented + 1  # inclui este próprio repositório de portefólio
     $core = [ordered]@{
-        repositorios = $repositories
         projetos_documentados = $documented
         projetos = $projetos
     }
 
     if ($null -ne $existing) {
         $existingCore = [ordered]@{
-            repositorios = $existing.repositorios
             projetos_documentados = $existing.projetos_documentados
             projetos = $existingProjetos
         }
         if ((ConvertTo-CompactJson $existingCore) -ceq (ConvertTo-CompactJson $core)) {
             $script:SiteDocumented = $documented
-            $script:SiteRepositories = $repositories
-            Write-Host ("Estado do site já atualizado: {0} repositórios, {1} projetos documentados (sem alterações)." -f $repositories, $documented) -ForegroundColor DarkGray
+            Write-Host ("Estado do site já atualizado: {0} projetos mapeados (sem alterações)." -f $documented) -ForegroundColor DarkGray
             return
         }
     }
 
     $script:SiteDocumented = $documented
-    $script:SiteRepositories = $repositories
     $payload = [ordered]@{
         gerado_em = (Get-Date -Format 'yyyy-MM-dd HH:mm')
-        repositorios = $repositories
         projetos_documentados = $documented
         projetos = $projetos
     }
     $directory = Split-Path -Parent $dataFull
     if (-not (Test-Path -LiteralPath $directory)) { New-Item -ItemType Directory -Path $directory -Force | Out-Null }
     [IO.File]::WriteAllText($dataFull, (ConvertTo-CompactJson $payload) + "`n", $script:Utf8NoBom)
-    Write-Host ("Dados do site gerados (censurado): {0} repositórios, {1} projetos documentados." -f $repositories, $documented) -ForegroundColor Green
+    Write-Host ("Dados do site gerados (censurado): {0} projetos mapeados." -f $documented) -ForegroundColor Green
 }
 
 function Get-CountSafeNormalized([string] $Text) {
@@ -231,19 +225,18 @@ function Test-CountOnlyChange([string] $RelativePath) {
     return ((Get-CountSafeNormalized $oldText) -ceq (Get-CountSafeNormalized $newText))
 }
 
-function Sync-CountTexts([int] $Documented, [int] $Repositories) {
+function Sync-CountTexts([int] $Documented) {
     # Keeps the static counts in README and the OG image aligned with the generated data.
     $rules = @{
         'README.md' = @(
+            @{ Pattern = '(\*\*)\d+( projetos mapeados\*\*)'; Replacement = ('${1}' + $Documented + '${2}') },
             @{ Pattern = '(\*\*)\d+( projetos\*\*)'; Replacement = ('${1}' + $Documented + '${2}') },
-            @{ Pattern = '(\*\*)\d+( repositórios\*\*)'; Replacement = ('${1}' + $Repositories + '${2}') },
             @{ Pattern = '(## Projetos documentados \()\d+(\))'; Replacement = ('${1}' + $Documented + '${2}') },
             @{ Pattern = '(\(\s*)\d+( cards gerados)'; Replacement = ('${1}' + $Documented + '${2}') },
             @{ Pattern = '(grelha \()\d+(\))'; Replacement = ('${1}' + $Documented + '${2}') }
         )
         'og-image.svg' = @(
             @{ Pattern = '\d+( projetos reais)'; Replacement = ([string] $Documented + '$1') },
-            @{ Pattern = '(GITHUB )\d+( REPOS)'; Replacement = ('${1}' + $Repositories + '${2}') },
             @{ Pattern = '\d+( projetos documentados)'; Replacement = ([string] $Documented + '$1') }
         )
     }
@@ -474,7 +467,7 @@ function Invoke-AuditCycle {
     $description = Get-RedactedReadmeDescription
     Update-Description $description
     Set-ProjectsData
-    Sync-CountTexts $script:SiteDocumented $script:SiteRepositories
+    Sync-CountTexts $script:SiteDocumented
 
     $allowedPaths = @($generatedPaths) + @($countSyncPaths)
     $expected = @{}

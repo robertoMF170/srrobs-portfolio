@@ -11,7 +11,7 @@ Live: `https://robertomf170.github.io/srrobs-portfolio` (após ativar GitHub Pag
 - **Loader** `SRROBS_OS — BOOT` com barra + `%` + wipe.
 - **Taskbar** fixa + **marquee** de stack + **scroll-progress** vermelho.
 - **Hero** com tipografia `Space Grotesk` + **Stagger** linha a linha.
-- **13 projetos** (de **14 repositórios**) em grelha filtrável (`TODOS / TRADING / GAMES / BOTS / UTILS`) + **modal** com “O que faz + Arquitetura + ficheiros-chave” — tudo já documentado do `D:\`.
+- **13 projetos mapeados** em grelha filtrável (`TODOS / TRADING / GAMES / BOTS / UTILS`) + **modal** com “O que faz + Arquitetura + ficheiros-chave” — tudo já documentado do `D:\`.
 - **Animações premium**: Lenis smooth scroll, parallax grid, cursor custom (anel+dot), magnetic nos botões, tilt 3D nas janelas, reveals por `IntersectionObserver`.
 
 ## Stack
