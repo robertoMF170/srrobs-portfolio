@@ -1,4 +1,4 @@
-[CmdletBinding()]
+﻿[CmdletBinding()]
 param(
     [ValidateRange(30, 86400)]
     [int] $IntervalSeconds = 300,
