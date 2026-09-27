@@ -11,7 +11,7 @@ Live: `https://robertomf170.github.io/srrobs-portfolio` (após ativar GitHub Pag
 - **Loader** `SRROBS_OS — BOOT` com barra + `%` + wipe.
 - **Taskbar** fixa + **marquee** de stack + **scroll-progress** vermelho.
 - **Hero** com tipografia `Space Grotesk` + **Stagger** linha a linha.
-- **13 projetos** em grelha filtrável (`TODOS / TRADING / GAMES / BOTS / UTILS`) + **modal** com “O que faz + Arquitetura + ficheiros-chave” — tudo já documentado do `D:\`.
+- **13 projetos** (de **14 repositórios**) em grelha filtrável (`TODOS / TRADING / GAMES / BOTS / UTILS`) + **modal** com “O que faz + Arquitetura + ficheiros-chave” — tudo já documentado do `D:\`.
 - **Animações premium**: Lenis smooth scroll, parallax grid, cursor custom (anel+dot), magnetic nos botões, tilt 3D nas janelas, reveals por `IntersectionObserver`.
 
 ## Stack
@@ -41,12 +41,12 @@ python -m http.server 8000
 ## Estrutura
 
 ```
-index.html      # 4 janelas: hero, sobre, projetos (12 cards + filtros), stack, contacto + modal
+index.html      # 4 janelas: hero, sobre, projetos (13 cards gerados + filtros), stack, contacto + modal
 style.css       # brutalist OS: --black #070707, --white #F4F4F2, --red #E30613
-app.js          # Lenis + reveals + cursor + magnetic + filtros + PLACEHOLDER_DATA (12) + tilt
+app.js          # Lenis + reveals + cursor + magnetic + filtros + grelha (13) de data/projetos.json + tilt
 ```
 
-## Projetos documentados (12)
+## Projetos documentados (13)
 
 | # | Nome | Badge | Stack |
 |---|---|---|---|

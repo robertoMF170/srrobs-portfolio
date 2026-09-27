@@ -829,6 +829,21 @@ updateActiveNav();
       if(filterCountEl) filterCountEl.textContent = total;
       if(footProjetos) footProjetos.textContent = total;
       if(footRepos) footRepos.textContent = repos;
+      // Todos os textos de contagem ficam ligados ao JSON (hero, sobre, contacto, navigation).
+      document.querySelectorAll('.js-doc').forEach(el=>{ el.textContent = total; });
+      document.querySelectorAll('.js-repos').forEach(el=>{ el.textContent = repos; });
+      const stat = document.querySelector('.about-stats [data-count]');
+      if(stat){
+        stat.setAttribute('data-count', total);
+        const sec = stat.closest('.reveal');
+        if(sec && sec.classList.contains('in')) stat.textContent = total;
+      }
+      ['meta[name="description"]','meta[property="og:title"]','meta[property="og:description"]','meta[name="twitter:title"]'].forEach(sel=>{
+        const el = document.querySelector(sel);
+        if(!el) return;
+        const content = el.getAttribute('content');
+        if(content) el.setAttribute('content', content.replace(/\b\d+ projetos/g, total + ' projetos'));
+      });
       const counts = countsByCategory(projetos);
       filterBtns.forEach(btn=>{
         const span = btn.querySelector('span');

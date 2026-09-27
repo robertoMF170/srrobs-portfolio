@@ -18,11 +18,12 @@ Set-Location $repo
 $descriptionPath = 'todo/repository-description.txt'
 $dataPath = 'data/projetos.json'
 $generatedPaths = @($descriptionPath, $dataPath)
+$countSyncPaths = @('README.md', 'og-image.svg')
 $descriptionMaxLength = 350
 $expectedCommitSubject = 'chore: update generated redacted portfolio data'
 $protectedPaths = @(
-    'index.html', 'app.js', 'style.css', 'favicon.svg', 'og-image.svg',
-    '404.html', 'robots.txt', 'sitemap.xml', '.nojekyll', 'README.md',
+    'index.html', 'app.js', 'style.css', 'favicon.svg',
+    '404.html', 'robots.txt', 'sitemap.xml', '.nojekyll',
     'src/', 'tests/', '.github/', 'visitas_totals.json'
 )
 
@@ -192,11 +193,15 @@ function Set-ProjectsData {
             projetos = $existingProjetos
         }
         if ((ConvertTo-CompactJson $existingCore) -ceq (ConvertTo-CompactJson $core)) {
+            $script:SiteDocumented = $documented
+            $script:SiteRepositories = $repositories
             Write-Host ("Estado do site já atualizado: {0} repositórios, {1} projetos documentados (sem alterações)." -f $repositories, $documented) -ForegroundColor DarkGray
             return
         }
     }
 
+    $script:SiteDocumented = $documented
+    $script:SiteRepositories = $repositories
     $payload = [ordered]@{
         gerado_em = (Get-Date -Format 'yyyy-MM-dd HH:mm')
         repositorios = $repositories
@@ -207,6 +212,55 @@ function Set-ProjectsData {
     if (-not (Test-Path -LiteralPath $directory)) { New-Item -ItemType Directory -Path $directory -Force | Out-Null }
     [IO.File]::WriteAllText($dataFull, (ConvertTo-CompactJson $payload) + "`n", $script:Utf8NoBom)
     Write-Host ("Dados do site gerados (censurado): {0} repositórios, {1} projetos documentados." -f $repositories, $documented) -ForegroundColor Green
+}
+
+function Get-CountSafeNormalized([string] $Text) {
+    # Ignores digits and project-table lines so only 'real' prose changes are detected.
+    $normalized = $Text -replace "`r`n", "`n"
+    $lines = @($normalized -split "`n" | Where-Object { $_ -notmatch '^\s*\|' })
+    return (($lines -join "`n") -replace '\d+', '#')
+}
+
+function Test-CountOnlyChange([string] $RelativePath) {
+    $head = Invoke-NativeCommand 'git' @('show', ('HEAD:' + $RelativePath))
+    if ($head.ExitCode -ne 0) { return $false }
+    $full = Join-Path $repo $RelativePath
+    if (-not (Test-Path -LiteralPath $full)) { return $false }
+    $oldText = ($head.Output -join "`n")
+    $newText = [IO.File]::ReadAllText($full)
+    return ((Get-CountSafeNormalized $oldText) -ceq (Get-CountSafeNormalized $newText))
+}
+
+function Sync-CountTexts([int] $Documented, [int] $Repositories) {
+    # Keeps the static counts in README and the OG image aligned with the generated data.
+    $rules = @{
+        'README.md' = @(
+            @{ Pattern = '(\*\*)\d+( projetos\*\*)'; Replacement = ('$1' + $Documented + '$2') },
+            @{ Pattern = '(\*\*)\d+( repositórios\*\*)'; Replacement = ('$1' + $Repositories + '$2') },
+            @{ Pattern = '(## Projetos documentados \()\d+(\))'; Replacement = ('$1' + $Documented + '$2') },
+            @{ Pattern = '(\(\s*)\d+( cards gerados)'; Replacement = ('$1' + $Documented + '$2') },
+            @{ Pattern = '(grelha \()\d+(\))'; Replacement = ('$1' + $Documented + '$2') }
+        )
+        'og-image.svg' = @(
+            @{ Pattern = '\d+( projetos reais)'; Replacement = ($Documented + '$1') },
+            @{ Pattern = '(GITHUB )\d+( REPOS)'; Replacement = ('$1' + $Repositories + '$2') },
+            @{ Pattern = '\d+( projetos documentados)'; Replacement = ($Documented + '$1') }
+        )
+    }
+    foreach ($relative in $countSyncPaths) {
+        if (-not $rules.ContainsKey($relative)) { continue }
+        $full = Join-Path $repo $relative
+        if (-not (Test-Path -LiteralPath $full)) { continue }
+        $text = [IO.File]::ReadAllText($full)
+        $updated = $text
+        foreach ($rule in $rules[$relative]) {
+            $updated = [regex]::Replace($updated, $rule.Pattern, $rule.Replacement)
+        }
+        if ($updated -cne $text) {
+            [IO.File]::WriteAllText($full, $updated, $script:Utf8NoBom)
+            Write-Host ("Contagens sincronizadas em {0} (censurado)." -f $relative) -ForegroundColor Green
+        }
+    }
 }
 
 function Invoke-GitChecked([string[]] $Arguments) {
@@ -420,9 +474,11 @@ function Invoke-AuditCycle {
     $description = Get-RedactedReadmeDescription
     Update-Description $description
     Set-ProjectsData
+    Sync-CountTexts $script:SiteDocumented $script:SiteRepositories
 
+    $allowedPaths = @($generatedPaths) + @($countSyncPaths)
     $expected = @{}
-    foreach ($generatedPath in $generatedPaths) {
+    foreach ($generatedPath in $allowedPaths) {
         $content = Get-DiskContent $generatedPath
         if ($null -ne $content) { $expected[$generatedPath] = $content }
     }
@@ -455,10 +511,18 @@ function Invoke-AuditCycle {
 
     # Site, README, src/, tests/ and all user-created files remain untouched. Only the generated,
     # censored files can be committed; unknown personal data cannot accidentally enter a push.
-    $unknown = @($entries | Where-Object { $generatedPaths -notcontains $_.Path })
+    $unknown = @($entries | Where-Object { $allowedPaths -notcontains $_.Path })
     if ($unknown.Count -gt 0) {
         Write-Host 'Commit bloqueado: há alterações além dos ficheiros gerados. Nada foi staged, commitado ou enviado.' -ForegroundColor Yellow
         return
+    }
+    foreach ($countPath in $countSyncPaths) {
+        if ($entries | Where-Object { $_.Path -ceq $countPath }) {
+            if (-not (Test-CountOnlyChange $countPath)) {
+                Write-Host 'Commit bloqueado: README/imagem mudaram texto além das contagens. Faz commit manual dessas edições.' -ForegroundColor Yellow
+                return
+            }
+        }
     }
     if (@($entries | Where-Object { Test-ProtectedPath $_.Path }).Count -gt 0) {
         Write-Host 'Commit bloqueado por proteção de caminho.' -ForegroundColor Yellow
@@ -476,7 +540,7 @@ function Invoke-AuditCycle {
         return
     }
 
-    Invoke-GitChecked (@('add', '--') + $generatedPaths)
+    Invoke-GitChecked (@('add', '--') + $allowedPaths)
     $staged = Invoke-NativeCommand 'git' @('diff', '--cached', '--name-only')
     if ($staged.ExitCode -ne 0 -or $staged.Output.Count -eq 0) {
         Write-Host 'Verificação do staging falhou; não foi criado commit.' -ForegroundColor Yellow
@@ -506,7 +570,7 @@ function Invoke-AuditCycle {
     }
 }
 
-Write-Host 'Loop seguro iniciado. O site e o README nunca são editados; só os dados gerados e censurados (descrição + data/projetos.json) são commitados. Ctrl+C para parar.' -ForegroundColor Green
+Write-Host 'Loop seguro iniciado. O site nunca é editado; só dados gerados/censurados (descrição, data/projetos.json e as contagens de README/og-image) são commitados. Ctrl+C para parar.' -ForegroundColor Green
 Write-Host ("Ciclo: {0} segundos. Usa -Once para executar apenas um ciclo." -f $IntervalSeconds) -ForegroundColor Green
 if ($Once) {
     try { Invoke-AuditCycle } catch { Write-LoopError $_; exit 1 }
