@@ -125,28 +125,71 @@ function Get-DiskContent([string] $RelativePath) {
     return ([IO.File]::ReadAllText($full)).Trim()
 }
 
+function Escape-HtmlText([string] $Text) {
+    if ($null -eq $Text) { return '' }
+    return $Text.Replace('&', '&amp;').Replace('<', '&lt;').Replace('>', '&gt;')
+}
+
 function Set-ProjectsData {
-    # Builds the censored site data from the README table only. Rewrites the file only when the
-    # data actually changes, so a stable loop does not create empty commits every cycle.
+    # Merges the README table into the censored site data. Curated entries are never touched;
+    # README projects that are not present yet are appended as new (censored, plain text) cards.
+    # The file is rewritten only when the merged data actually changes.
     $dataFull = Join-Path $repo $dataPath
     $rows = @(Get-ReadmeProjectRows)
-    $documented = $rows.Count
+
+    $existingProjetos = @()
+    $existing = $null
+    if (Test-Path -LiteralPath $dataFull) {
+        try {
+            $existing = Get-Content -LiteralPath $dataFull -Raw -Encoding UTF8 | ConvertFrom-Json
+            $existingProjetos = @($existing.projetos)
+        } catch { $existing = $null; $existingProjetos = @() }
+    }
+
+    $knownNums = @{}
+    foreach ($entry in $existingProjetos) {
+        if ($entry.num) { $knownNums[[string] $entry.num] = $true }
+    }
+
+    $projetos = New-Object System.Collections.ArrayList
+    foreach ($entry in $existingProjetos) { [void] $projetos.Add($entry) }
+    foreach ($row in $rows) {
+        if ($knownNums.ContainsKey([string] $row.num)) { continue }
+        $stackList = @($row.stack)
+        [void] $projetos.Add([pscustomobject][ordered]@{
+            num = $row.num
+            slug = 'projeto-' + $row.num
+            titulo = $row.titulo
+            etiqueta = $row.etiqueta
+            status = '● NOVO — DOCUMENTADO'
+            categoria = ''
+            featured = $false
+            desc = 'Projeto documentado no README. Stack: ' + (Escape-HtmlText ($stackList -join ', ')) + '.'
+            arch = Escape-HtmlText ($stackList -join ' • ')
+            pills = @($stackList | ForEach-Object { $_.ToUpperInvariant() })
+            link = ''
+            descModal = ''
+            archModal = ''
+            bullets = @()
+            path = $row.etiqueta
+            pathFull = $row.titulo
+        })
+        $knownNums[[string] $row.num] = $true
+    }
+
+    $documented = $projetos.Count
     $repositories = $documented + 1  # inclui este próprio repositório de portefólio
     $core = [ordered]@{
         repositorios = $repositories
         projetos_documentados = $documented
-        projetos = $rows
+        projetos = $projetos
     }
 
-    $existing = $null
-    if (Test-Path -LiteralPath $dataFull) {
-        try { $existing = Get-Content -LiteralPath $dataFull -Raw -Encoding UTF8 | ConvertFrom-Json } catch { $existing = $null }
-    }
     if ($null -ne $existing) {
         $existingCore = [ordered]@{
             repositorios = $existing.repositorios
             projetos_documentados = $existing.projetos_documentados
-            projetos = $existing.projetos
+            projetos = $existingProjetos
         }
         if ((ConvertTo-CompactJson $existingCore) -ceq (ConvertTo-CompactJson $core)) {
             Write-Host ("Estado do site já atualizado: {0} repositórios, {1} projetos documentados (sem alterações)." -f $repositories, $documented) -ForegroundColor DarkGray
@@ -158,7 +201,7 @@ function Set-ProjectsData {
         gerado_em = (Get-Date -Format 'yyyy-MM-dd HH:mm')
         repositorios = $repositories
         projetos_documentados = $documented
-        projetos = $rows
+        projetos = $projetos
     }
     $directory = Split-Path -Parent $dataFull
     if (-not (Test-Path -LiteralPath $directory)) { New-Item -ItemType Directory -Path $directory -Force | Out-Null }
@@ -238,6 +281,10 @@ function Get-GitHubRepositorySlug {
 function Get-GitHubTokenSecure {
     if (-not $script:GitHubTokenPrompted) {
         $script:GitHubTokenPrompted = $true
+        if ([Console]::IsInputRedirected) {
+            Write-Host 'Entrada não interativa: a descrição remota não será pedida. Use gh auth login para a manter atualizada.' -ForegroundColor Yellow
+            return $null
+        }
         Write-Host 'Para atualizar a descrição, use gh auth login ou forneça um token fine-grained com permissões Administration: write no repositório.' -ForegroundColor Yellow
         $script:GitHubTokenSecure = Read-Host 'Token GitHub (Enter para saltar; entrada oculta)' -AsSecureString
     }

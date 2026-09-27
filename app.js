@@ -205,8 +205,8 @@ document.querySelectorAll('.stat-num[data-count]').forEach(el=>{
 // ========== PROJECT FILTERS ==========
 const filterBtns = document.querySelectorAll('.filter-btn');
 const filterIndicator = document.getElementById('filterIndicator');
-const projectCards = document.querySelectorAll('.project-card');
 const filterCountEl = document.getElementById('filterCount');
+const getProjectCards = () => document.querySelectorAll('.project-card');
 function updateFilterIndicator(){
   const active = document.querySelector('.filter-btn.active');
   const bar = document.querySelector('.filter-bar');
@@ -220,7 +220,7 @@ function updateFilterIndicator(){
 }
 function applyFilter(filter){
   let visible=0;
-  projectCards.forEach(card=>{
+  getProjectCards().forEach(card=>{
     const cats = (card.getAttribute('data-category')||'').split(/\s+/);
     const show = filter==='all' || cats.includes(filter);
     card.classList.toggle('hidden', !show);
@@ -234,7 +234,7 @@ function applyFilter(filter){
     setTimeout(()=>{ filterCountEl.style.transform=''; filterCountEl.style.color=''; }, 260);
   }
   // stagger in visible cards
-  projectCards.forEach((card,i)=>{
+  getProjectCards().forEach((card,i)=>{
     if(card.classList.contains('hidden')) return;
     card.style.opacity='0'; card.style.transform='translateY(10px)';
     setTimeout(()=>{
@@ -434,12 +434,15 @@ const PROJECT_DATA = {
   }
 };
 
+// Dados do modal: curados + acrescentados a partir de data/projetos.json
+const MODAL_DATA = Object.assign({}, PROJECT_DATA);
+
 const modal = document.getElementById('projectModal');
 const modalCard = document.getElementById('modalCard');
 const modalClose = document.getElementById('modalClose');
 const modalClose2 = document.getElementById('modalClose2');
 function openProjectModal(key){
-  const d = PROJECT_DATA[key];
+  const d = MODAL_DATA[key];
   if(!d || !modal) return;
   document.getElementById('modalNum').textContent = d.num;
   document.getElementById('modalPath').textContent = d.path;
@@ -469,13 +472,21 @@ document.querySelectorAll('[data-modal]').forEach(btn=>{
     openProjectModal(btn.getAttribute('data-modal'));
   });
 });
-document.querySelectorAll('.project-card').forEach(card=>{
-  card.style.cursor='pointer';
-  card.addEventListener('click', (e)=>{
-    if(e.target.closest('.card-cta')) return;
-    const key = card.getAttribute('data-project');
-    if(key) openProjectModal(key);
-  });
+// Delegacao: os cards sao renderizados depois do load, a partir do JSON.
+const projectsGridEl = document.getElementById('projectsGrid');
+projectsGridEl?.addEventListener('click', (e)=>{
+  const cta = e.target.closest('.card-cta');
+  if(cta){
+    if(cta.hasAttribute('data-modal')){
+      e.preventDefault();
+      openProjectModal(cta.getAttribute('data-modal'));
+    }
+    return;
+  }
+  const card = e.target.closest('.project-card');
+  if(!card) return;
+  const key = card.getAttribute('data-project');
+  if(key) openProjectModal(key);
 });
 modalClose?.addEventListener('click', closeProjectModal);
 modalClose2?.addEventListener('click', closeProjectModal);
@@ -769,4 +780,66 @@ updateActiveNav();
   else start();
 
   window._srLocal = { send: send, deviceId: deviceId };
+})();
+
+// ========== PROJETOS A PARTIR DE data/projetos.json ==========
+// A grelha e a contagem sao geradas a partir do ficheiro censurado que o loop mantem.
+(function loadProjects(){
+  const grid = document.getElementById('projectsGrid');
+  if(!grid) return;
+  const footProjetos = document.getElementById('estadoProjetosFoot');
+  const footRepos = document.getElementById('estadoReposFoot');
+  const escHtml = (s)=> String(s==null?'':s).replace(/[&<>"]/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+  const statusClass = (s)=> /^\s*●/.test(s||'') ? 'active' : 'warn';
+  function cardHtml(p){
+    const pills = (p.pills||[]).map(x=>`<span class="pill">${escHtml(x)}</span>`).join('');
+    const link = p.link ? `<a class="card-cta" href="${escHtml(p.link)}" target="_blank" rel="noopener">GITHUB ↗</a>` : '';
+    return `<article class="project-card${p.featured?' featured':''}" data-category="${escHtml(p.categoria||'')}" data-project="${escHtml(p.slug)}">`
+      + `<div class="card-top">`
+      + `<span class="card-num">${escHtml(p.num)}</span>`
+      + `<span class="card-badge">${escHtml(p.etiqueta)}</span>`
+      + `<span class="card-status ${statusClass(p.status)}">${escHtml(p.status)}</span>`
+      + `</div>`
+      + `<h3>${escHtml(p.titulo)}</h3>`
+      + `<p class="card-desc">${p.desc||''}</p>`
+      + `<div class="card-arch">${escHtml(p.arch)}</div>`
+      + `<div class="meta-row">${pills}</div>`
+      + `<div class="card-actions">${link}<button class="card-cta secondary" data-modal="${escHtml(p.slug)}">DETALHES</button></div>`
+      + `</article>`;
+  }
+  function countsByCategory(projetos){
+    const counts={};
+    projetos.forEach(p=>(p.categoria||'').split(/\s+/).filter(Boolean).forEach(c=>{ counts[c]=(counts[c]||0)+1; }));
+    return counts;
+  }
+  fetch('data/projetos.json', { cache:'no-store' })
+    .then(r=>{ if(!r.ok) throw new Error('HTTP '+r.status); return r.json(); })
+    .then(d=>{
+      const projetos = d.projetos||[];
+      grid.innerHTML = projetos.map(cardHtml).join('');
+      projetos.forEach(p=>{
+        MODAL_DATA[p.slug] = {
+          num:p.num, path:p.path||p.etiqueta, status:p.status, title:p.titulo,
+          desc:p.descModal||String(p.desc||'').replace(/<[^>]+>/g,''),
+          bullets:p.bullets||[], arch:p.archModal||p.arch, pills:p.pills||[], pathFull:p.pathFull||p.titulo
+        };
+      });
+      const total = d.projetos_documentados||projetos.length;
+      const repos = d.repositorios||total;
+      if(filterCountEl) filterCountEl.textContent = total;
+      if(footProjetos) footProjetos.textContent = total;
+      if(footRepos) footRepos.textContent = repos;
+      const counts = countsByCategory(projetos);
+      filterBtns.forEach(btn=>{
+        const span = btn.querySelector('span');
+        if(!span) return;
+        const f = btn.dataset.filter;
+        span.textContent = (f==='all') ? total : (counts[f]||0);
+      });
+      applyFilter(document.querySelector('.filter-btn.active')?.dataset.filter || 'all');
+      updateFilterIndicator();
+    })
+    .catch(()=>{
+      grid.innerHTML = '<p style="padding:16px;font-size:12px;color:#666">Não foi possível carregar data/projetos.json. Abre o site por servidor local (ex.: python -m http.server).</p>';
+    });
 })();
