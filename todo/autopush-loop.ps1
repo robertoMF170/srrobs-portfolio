@@ -235,16 +235,16 @@ function Sync-CountTexts([int] $Documented, [int] $Repositories) {
     # Keeps the static counts in README and the OG image aligned with the generated data.
     $rules = @{
         'README.md' = @(
-            @{ Pattern = '(\*\*)\d+( projetos\*\*)'; Replacement = ('$1' + $Documented + '$2') },
-            @{ Pattern = '(\*\*)\d+( repositórios\*\*)'; Replacement = ('$1' + $Repositories + '$2') },
-            @{ Pattern = '(## Projetos documentados \()\d+(\))'; Replacement = ('$1' + $Documented + '$2') },
-            @{ Pattern = '(\(\s*)\d+( cards gerados)'; Replacement = ('$1' + $Documented + '$2') },
-            @{ Pattern = '(grelha \()\d+(\))'; Replacement = ('$1' + $Documented + '$2') }
+            @{ Pattern = '(\*\*)\d+( projetos\*\*)'; Replacement = ('${1}' + $Documented + '${2}') },
+            @{ Pattern = '(\*\*)\d+( repositórios\*\*)'; Replacement = ('${1}' + $Repositories + '${2}') },
+            @{ Pattern = '(## Projetos documentados \()\d+(\))'; Replacement = ('${1}' + $Documented + '${2}') },
+            @{ Pattern = '(\(\s*)\d+( cards gerados)'; Replacement = ('${1}' + $Documented + '${2}') },
+            @{ Pattern = '(grelha \()\d+(\))'; Replacement = ('${1}' + $Documented + '${2}') }
         )
         'og-image.svg' = @(
-            @{ Pattern = '\d+( projetos reais)'; Replacement = ($Documented + '$1') },
-            @{ Pattern = '(GITHUB )\d+( REPOS)'; Replacement = ('$1' + $Repositories + '$2') },
-            @{ Pattern = '\d+( projetos documentados)'; Replacement = ($Documented + '$1') }
+            @{ Pattern = '\d+( projetos reais)'; Replacement = ([string] $Documented + '$1') },
+            @{ Pattern = '(GITHUB )\d+( REPOS)'; Replacement = ('${1}' + $Repositories + '${2}') },
+            @{ Pattern = '\d+( projetos documentados)'; Replacement = ([string] $Documented + '$1') }
         )
     }
     foreach ($relative in $countSyncPaths) {
