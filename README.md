@@ -4,14 +4,14 @@
 
 ![Design](https://img.shields.io/badge/design-brutalist_OS-black) ![Colors](https://img.shields.io/badge/preto-%23070707-black) ![Red](https://img.shields.io/badge/vermelho-%23E30613-red) ![Lenis](https://img.shields.io/badge/Lenis-smooth_scroll-blue)
 
-Live: `https://robertomf170.github.io/srrobs-portfolio` (após ativar GitHub Pages)
+Live: `https://srrobs-portfolio.pt` (GitHub Pages + domínio amen.pt)
 
 ## O que tem
 
 - **Loader** `SRROBS_OS — BOOT` com barra + `%` + wipe.
 - **Taskbar** fixa + **marquee** de stack + **scroll-progress** vermelho.
 - **Hero** com tipografia `Space Grotesk` + **Stagger** linha a linha.
-- **14 projetos mapeados** em grelha filtrável (`TODOS / TRADING / GAMES / BOTS / UTILS`) + **modal** com “O que faz + Arquitetura + ficheiros-chave” — tudo já documentado do `D:\`.
+- **15 projetos mapeados** em grelha filtrável (`TODOS / TRADING / GAMES / BOTS / UTILS`) + **modal** com “O que faz + Arquitetura + ficheiros-chave” — tudo já documentado do `D:\`.
 - **Animações premium**: Lenis smooth scroll, parallax grid, cursor custom (anel+dot), magnetic nos botões, tilt 3D nas janelas, reveals por `IntersectionObserver`.
 
 ## Stack
@@ -41,12 +41,12 @@ python -m http.server 8000
 ## Estrutura
 
 ```
-index.html      # 4 janelas: hero, sobre, projetos (14 cards gerados + filtros), stack, contacto + modal
+index.html      # 4 janelas: hero, sobre, projetos (15 cards gerados + filtros), stack, contacto + modal
 style.css       # brutalist OS: --black #070707, --white #F4F4F2, --red #E30613
-app.js          # Lenis + reveals + cursor + magnetic + filtros + grelha (14) de data/projetos.json + tilt
+app.js          # Lenis + reveals + cursor + magnetic + filtros + grelha (15) de data/projetos.json + tilt
 ```
 
-## Projetos documentados (14)
+## Projetos documentados (15)
 
 | # | Nome | Badge | Stack |
 |---|---|---|---|
@@ -64,6 +64,7 @@ app.js          # Lenis + reveals + cursor + magnetic + filtros + grelha (14) de
 | 12 | MT2Guide — Quest Helper | MT2GUIDE | eXLib.mix, Python, Client-side |
 | 13 | Laboratório de Testes e Análises — CSGO500 (Casino) | CSGO500 — CASINO | Tampermonkey, OpenCV |
 | 14 | srrobs portfolio | PYTHON | PYTHON |
+| 15 | Bets Converter Paqbet Csgo500 Sessao 500 Lab Fimathe Cycle Pcm Kronos Klines Ai Metin2 Quest Helper Mt2robs Lite Okx Sup | PYTHON HTML PYTHON PYTHON PYTHON JAVASCRIPT PYTHON HTML PYTHON PYTHON JAVASCRIPT PYTHON | PYTHON HTML PYTHON PYTHON PYTHON JAVASCRIPT PYTHON HTML PYTHON PYTHON JAVASCRIPT PYTHON |
 
 > Cada card → `VER DETALHES ↗` → modal com bullets do que cada projeto **é e faz** (sem `D:\`, sem lore de disco).
 
