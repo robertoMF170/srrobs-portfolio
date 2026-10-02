@@ -2,6 +2,11 @@
 .freebuff/
 tools/
 github-setup/
+Agente_Etico/
+Agente_AntiEtico/
+agentes/
+*.atividade.log
+ciberseguranca/
 # ===== segredos / dados pessoais - NUNCA commitar =====
 *.token
 .gh_token
